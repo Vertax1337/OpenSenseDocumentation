@@ -1,0 +1,20 @@
+# Generated documentation/build output
+output/*
+!output/.gitkeep
+generated/
+
+# Sanitized and customer-specific generated data
+*.sanitized.xml
+sanitization-report*.json
+infrastructure-model*.json
+build-manifest*.json
+
+# Never commit real OPNsense customer exports
+config.xml
+config-OPNsense*.xml
+
+# PowerShell / editor artifacts
+*.tmp
+*.log
+.vscode/
+.idea/
