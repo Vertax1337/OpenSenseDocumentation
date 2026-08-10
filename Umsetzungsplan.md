@@ -1,9 +1,11 @@
 # Umsetzungsplan – OpenSenseDocumentation
 
 > **Status:** Source of Truth für die Entwicklung  
-> **Repository:** `Vertax1337/OpenSenseDocumentation`  
+> **Repository:** `Vertax1337/OpenSenseDocumentation` (GitHub bis zum verifizierten Azure-DevOps-Cutover)  
+> **Zielplattform:** Azure DevOps über die bestehende DevOps-Bootstrap-Struktur  
 > **Ziel:** Deterministische, reproduzierbare MSP-Kundendokumentation aus OPNsense-Konfigurationen erzeugen  
-> **Grundsatz:** Technische Fakten werden **nicht** durch ein LLM erfunden oder frei interpretiert. Parser, Regeln, Korrelation, Validierung, Diagramme und Dokumentstruktur müssen deterministisch sein.
+> **Grundsatz:** Technische Fakten werden **nicht** durch ein LLM erfunden oder frei interpretiert. Parser, Regeln, Korrelation, Validierung, Diagramme und Dokumentstruktur müssen deterministisch sein.  
+> **Plattform-Grundsatz:** Azure-DevOps-Projekte, Repositories, Kunden-Trennung, zentrale Pipeline-Basis und übergeordnete Policies werden **nicht** in OpenSenseDocumentation neu erfunden. Dafür ist der bestehende DevOps-Bootstrap die übergeordnete Source of Truth.
 
 ---
 
@@ -454,6 +456,40 @@ oder:
 ```text
 Firewall /24 differs from NAT /16
 ```
+
+---
+
+## 4.3 Verantwortungsgrenze zu Azure DevOps
+
+OpenSenseDocumentation ist **nicht** für den Aufbau einer eigenen Azure-DevOps-Projekt- oder Kundenstruktur verantwortlich.
+
+Verbindlich gilt:
+
+> **Azure DevOps Deployment erfolgt über die bestehende DevOps-Bootstrap-Struktur.**
+
+Der DevOps-Bootstrap ist die übergeordnete Source of Truth für:
+
+- Azure-DevOps-Projekt- und Repository-Struktur
+- standardisierte Kunden-Trennung
+- zentrale Pipeline-Grundstruktur und wiederverwendbare Pipeline-Templates
+- übergeordnete Repository-/Branch-/Policy-Konfiguration
+- Bereitstellung der vorgesehenen Ziel-Repositories
+
+OpenSenseDocumentation ist dagegen verantwortlich für:
+
+- Sanitizer
+- Canonical Infrastructure Model
+- Parser
+- Rule-/Correlation-Engine
+- Enrichment
+- Validierung
+- Diagramm- und Dokument-Renderer
+- fachliche Testfälle und Golden Files
+- den technischen Pipeline-Contract für den Dokumentationsbuild
+
+Dadurch wird keine zweite Bootstrap-/Kundenlogik innerhalb dieses Repositories aufgebaut.
+
+Eine separate Migrationsphase zur Neuerfindung der Azure-DevOps-Struktur ist **nicht** Bestandteil dieses Projekts. Die Migration des Repositories wird als Deployment-/Plattformaufgabe innerhalb der bestehenden Bootstrap-Struktur durchgeführt.
 
 ---
 
@@ -1041,6 +1077,8 @@ Ziel:
 
 # 21. Repository-Struktur
 
+Die folgende Struktur beschreibt **nur das OpenSenseDocumentation-Tooling-Repository**. Die Azure-DevOps-Projektstruktur und die kundenbezogene Repository-Erzeugung liegen außerhalb dieses Repositories und werden durch den bestehenden DevOps-Bootstrap bereitgestellt.
+
 ```text
 OpenSenseDocumentation/
 │
@@ -1103,6 +1141,20 @@ OpenSenseDocumentation/
 ├── README.md
 └── Umsetzungsplan.md
 ```
+
+### 21.1 Azure-DevOps-Einordnung
+
+Nach dem Cutover wird dieses Repository in das durch den DevOps-Bootstrap vorgesehene Azure-Repos-Ziel überführt.
+
+Nicht Bestandteil von OpenSenseDocumentation sind:
+
+- Erzeugung von Kundenprojekten
+- Erzeugung kundenspezifischer Firewall-Repositories
+- Definition einer konkurrierenden Projekt-/Repo-Namenskonvention
+- Aufbau einer zweiten Pipeline-Template-Plattform
+- Aufbau einer zweiten Branch-/Policy-Bootstrap-Logik
+
+Diese Aufgaben bleiben beim DevOps-Bootstrap.
 
 ---
 
@@ -1204,9 +1256,28 @@ Finding source scope mismatch exists
 
 ---
 
-# 23. CI / Git Prozess
+# 23. CI / Azure DevOps Prozess
 
-Da OPNsense-Konfigurationen bereits in Git gesichert werden, soll der Dokumentbuild später automatisiert an Änderungen gekoppelt werden.
+Die CI/CD-Zielplattform ist Azure DevOps. Die dafür benötigte übergeordnete Plattformstruktur wird vom bestehenden DevOps-Bootstrap bereitgestellt und **nicht** innerhalb von OpenSenseDocumentation neu aufgebaut.
+
+Verantwortung des DevOps-Bootstraps:
+
+- Bereitstellung des Ziel-Repositories in Azure Repos
+- zentrale Pipeline-Grundstruktur bzw. wiederverwendbare Pipeline-Templates
+- standardisierte Kunden-/Repository-Trennung
+- übergeordnete Branch-/Policy-Konfiguration
+
+Verantwortung von OpenSenseDocumentation:
+
+- fachliche Build-Schritte und deren Reihenfolge
+- benötigte Runtime-/Tool-Versionen
+- Sanitizer-, Schema-, Parser-, Rule-, Renderer- und Regressionstests
+- Definition der erzeugten Build-Artefakte
+- deterministische Validierung und Build-Abbruchregeln
+
+Die derzeit vorhandenen GitHub-Actions-Workflows sind während der Übergangszeit Entwicklungs-/Migrationsartefakte. Sie sind **nicht** die langfristige Plattform-Source-of-Truth.
+
+Der spätere Azure-Pipelines-Contract muss die zentrale Bootstrap-/Template-Struktur konsumieren, anstatt parallel eine eigene Pipeline-Plattform aufzubauen.
 
 Zielpipeline:
 
@@ -1242,6 +1313,8 @@ Tests
       ├─ Render PDF
       └─ Generate Build Manifest
 ```
+
+Dabei bleibt die fachliche Pipeline identisch, unabhängig davon, ob sie während der Übergangszeit auf GitHub Actions oder nach dem Cutover auf Azure Pipelines ausgeführt wird.
 
 ---
 
@@ -1355,6 +1428,8 @@ Gemeinsame Kundendokumentation
 ```
 
 Damit kann später z. B. der Afros-Flow auch auf Azure-Seite vollständig mit UDR, NSG und VPN Gateway verifiziert werden.
+
+Die Bereitstellung der hierfür erforderlichen Azure-DevOps-Projekte und kundenspezifischen Repositories bleibt Aufgabe des DevOps-Bootstraps. Das Canonical Infrastructure Model definiert nur die technische Zusammenführung der Datenquellen.
 
 ---
 
@@ -1528,14 +1603,30 @@ Kea + Legacy darf niemals wieder zum falschen aktiven Pool führen.
 
 ---
 
-## Phase 12 – Git / CI Automation
+## Phase 12 – Azure DevOps Automation
 
-- [ ] GitHub Actions workflow
+Phase 12 implementiert **keine eigene DevOps-Projekt-/Repository-Bootstrap-Logik**. Sie bindet OpenSenseDocumentation an die bereits vorhandene DevOps-Bootstrap-Struktur an.
+
+- [ ] GitHub-Repository mit vollständiger Git-Historie in das vom DevOps-Bootstrap vorgesehene Azure-Repos-Ziel migrieren
+- [ ] bestehende GitHub-Actions-Prüfungen fachlich auf Azure Pipelines abbilden
+- [ ] zentrale Pipeline-Templates der Bootstrap-Struktur konsumieren statt zu duplizieren
+- [ ] benötigte Build-Validation/Policies an die Bootstrap-Vorgaben anbinden
 - [ ] Config Change Detection
 - [ ] automatic documentation build
-- [ ] artifacts
+- [ ] Pipeline Artifacts für Modell, Reports, Diagramme, DOCX/PDF
 - [ ] build report
 - [ ] infrastructure diff
+- [ ] GitHub erst nach verifiziertem Azure-DevOps-Cutover read-only/archiviert setzen
+
+### Definition of Done
+
+```text
+Azure DevOps Deployment nutzt die bestehende DevOps-Bootstrap-Struktur.
+OpenSenseDocumentation enthält keine konkurrierende Kunden-/Repository-Provisionierungslogik.
+Die fachlichen Regressionstests laufen auf der Zielpipeline erfolgreich.
+Der Azure-DevOps-Build erzeugt dieselben deterministischen Modell-/Dokumentationsartefakte.
+GitHub ist nach erfolgreichem Cutover nicht mehr die operative Source of Truth.
+```
 
 ---
 
@@ -1603,6 +1694,8 @@ Version 1.0 gilt erst als abgeschlossen, wenn alle folgenden Punkte erfüllt sin
 [ ] Build Manifest vorhanden
 [ ] Validierung kann Build bei P1-Problemen stoppen
 [ ] Regression Tests decken alle bisher gefundenen Fehler ab
+[ ] Azure DevOps Deployment erfolgt über die bestehende DevOps-Bootstrap-Struktur
+[ ] OpenSenseDocumentation dupliziert keine Kunden-/Repository-Bootstrap-Logik
 ```
 
 ---
@@ -1615,4 +1708,8 @@ Die wichtigste Architekturentscheidung dieses Projekts lautet:
 
 Die KI ist nur noch eine optionale sprachliche Schicht und niemals die technische Wahrheitsquelle.
 
-Damit wird aus dem bisherigen Proof of Concept ein reproduzierbarer MSP-Dokumentationsgenerator.
+Für die Plattform gilt ergänzend:
+
+> **Azure DevOps Deployment erfolgt über die bestehende DevOps-Bootstrap-Struktur. OpenSenseDocumentation definiert keine konkurrierende Azure-DevOps-Projekt-, Kunden- oder Repository-Provisionierungslogik.**
+
+Damit wird aus dem bisherigen Proof of Concept ein reproduzierbarer MSP-Dokumentationsgenerator, der sich sauber in die bestehende Azure-DevOps-Gesamtarchitektur einfügt.
