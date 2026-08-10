@@ -11,6 +11,7 @@ Describe 'Canonical Model stable IDs' {
         $a = New-StableModelId -Namespace 'Asset' -IdentityParts @('02:00:00:00:00:60','192.0.2.60')
         $b = New-StableModelId -Namespace 'Asset' -IdentityParts @('02:00:00:00:00:60','192.0.2.60')
         $a | Should -Be $b
+        $a | Should -Be 'asset:sha256:612f197baa4b231e592d4c87'
     }
 
     It 'creates different IDs when identity tuple order changes' {

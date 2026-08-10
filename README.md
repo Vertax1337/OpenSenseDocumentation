@@ -62,6 +62,22 @@ KI ist später nur optional für sprachliche Glättung zulässig und darf keine 
 
 Details: [`docs/Phase-2-Canonical-Infrastructure-Model.md`](./docs/Phase-2-Canonical-Infrastructure-Model.md)
 
+### Phase 3 – Deterministischer Core Parser
+
+- Parser-Komponente **0.1.0** in Python (nur Standardbibliothek zur Laufzeit)
+- Sanitization Report mit Status `Clean` und SHA-256-Match ist zwingende Eingangsbedingung
+- System, Interfaces, statische IPv4-Netze, VLANs, Aliases, Gateways, statische Routen, IPsec, NAT und Firewall werden deterministisch geparst
+- jeder technische Record besitzt Stable ID und Evidence/XPath
+- unbekannte Referenzen werden als `unresolvedReferences` erhalten und niemals still verworfen
+- aktive/deaktivierte Firewall-/NAT-/Route-Objekte bleiben getrennt
+- NAT-associated Firewall Rules werden bidirektional referenziert
+- route-based IPsec wird nur bei exaktem `tunnel_remote == gateway.address` mit Gateway/VTI verknüpft
+- öffentliche IPsec-Gegenstelle bleibt getrennt von VTI-Adresse
+- semantischer Fingerprint-Regressionstest für plattformübergreifend identische Modellinhalte
+- Tests laufen auf Linux und Windows
+
+Details: [`docs/Phase-3-Core-Parser.md`](./docs/Phase-3-Core-Parser.md)
+
 ## Verwendung des Sanitizers
 
 ```powershell
@@ -81,6 +97,22 @@ pwsh -NoProfile `
   -OutputPath "./generated/config.sanitized.xml" `
   -ReportPath "./generated/sanitization-report.json"
 ```
+
+## Core Parser verwenden
+
+```bash
+python src/Parser/convert_opnsense_config.py \
+  --input generated/config.sanitized.xml \
+  --report generated/sanitization-report.json \
+  --output generated/infrastructure-model.json
+```
+
+Der Parser verweigert die Verarbeitung bei:
+
+- Sanitizer-Status ungleich `Clean`
+- vorhandenen `residualFindings`
+- SHA-256-Abweichung zwischen Report und sanitisierter XML
+- ungültiger XML-Struktur
 
 ## Canonical Model Schema validieren
 
@@ -111,23 +143,30 @@ Lokal mit Pester 5:
 Invoke-Pester -Path ./tests -CI
 ```
 
+Parser-/Schema-Tests:
+
+```bash
+python -m pip install -r requirements-ci.txt
+python -m unittest discover -s tests/Parser -v
+python tools/validate_schema.py
+```
+
 Die PowerShell-CI testet auf Windows gegen:
 
 - Windows PowerShell 5.1
 - PowerShell 7
 
-Die Schema-CI validiert zusätzlich:
+Die Parser-CI testet denselben semantischen Modell-Fingerprint auf:
 
-- JSON-Schema-Metaschema
-- gültige Modell-Fixtures
-- absichtlich ungültige Regression-Fixtures
-- reproduzierbare Canonical-JSON-Ausgabe
+- Ubuntu
+- Windows
 
 ## Versionierung
 
 Das Projekt verwendet Semantic Versioning (`MAJOR.MINOR.PATCH`).
 
 - Repository-/Generatorversion: [`VERSION`](./VERSION)
+- Core Parser: aktuell `0.1.0`
 - Sanitizer: aktuell `1.1.0`
 - Canonical Infrastructure Model Schema: aktuell `1.0.0`
 - Stable-ID-Strategie: aktuell `1.0.0`
@@ -137,6 +176,6 @@ Das Projekt verwendet Semantic Versioning (`MAJOR.MINOR.PATCH`).
 
 ## Nächster Schritt
 
-**Phase 3 – Core Parser**
+**Phase 4 – DHCP / Asset Inventory**
 
-Als Nächstes werden System, Interfaces, VLANs, Gateways, statische Routen, Aliases, Firewall, NAT und IPsec deterministisch aus `config.sanitized.xml` in das Canonical Infrastructure Model überführt. Jeder Record muss dabei eine stabile ID und Evidence besitzen.
+Als Nächstes werden Kea und Legacy-DHCP getrennt geparst, die authoritative DHCP-Implementierung deterministisch bestimmt, Reservations übernommen und das Asset-Inventar mit versioniertem OUI-Enrichment aufgebaut. Der Regressionstest `Kea + Legacy -> Kea authoritative` ist dabei zwingend.

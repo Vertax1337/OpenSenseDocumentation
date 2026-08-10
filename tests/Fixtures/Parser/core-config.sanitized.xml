@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<opnsense>
+  <system>
+    <hostname>fw-example</hostname>
+    <domain>example.internal</domain>
+    <timezone>Europe/Berlin</timezone>
+    <dnsserver>1.1.1.1</dnsserver>
+    <webgui><protocol>https</protocol><port></port><authmode>Local Database,TOTP-Server</authmode></webgui>
+    <ssh><enabled>enabled</enabled></ssh>
+    <firmware><type>business</type><subscription>[REDACTED]</subscription></firmware>
+  </system>
+  <interfaces>
+    <wan><enable>1</enable><if>igc1</if><ipaddr>dhcp</ipaddr><ipaddrv6>dhcp6</ipaddrv6></wan>
+    <lan><enable>1</enable><if>igc0</if><descr>LAN</descr><ipaddr>192.0.2.1</ipaddr><subnet>24</subnet></lan>
+    <enc0><enable>1</enable><if>enc0</if><descr>IPsec</descr><virtual>1</virtual></enc0>
+    <ipsec1><enable>1</enable><if>ipsec1</if><descr>Site2Site VTI</descr></ipsec1>
+    <opt1><if>igc2</if><descr>IoT Parent</descr></opt1>
+    <opt2><if>vlan01</if><descr>IoT VLAN</descr></opt2>
+  </interfaces>
+  <vlans><vlan uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"><if>igc2</if><tag>20</tag><descr>IoT</descr><vlanif>vlan01</vlanif></vlan></vlans>
+  <OPNsense>
+    <Firewall><Alias><aliases>
+      <alias uuid="11111111-1111-1111-1111-111111111111"><enabled>1</enabled><name>APP_PORTS</name><type>port</type><content>443&#10;8443</content><description>Application ports</description></alias>
+      <alias uuid="22222222-2222-2222-2222-222222222222"><enabled>1</enabled><name>EMPTY_NET</name><type>network</type><content></content><description>Intentionally empty for regression</description></alias>
+      <alias uuid="33333333-3333-3333-3333-333333333333"><enabled>1</enabled><name>THREAT_FEED</name><type>external</type><content></content><description>Dynamic external alias</description></alias>
+    </aliases></Alias></Firewall>
+    <Gateways><gateway_item uuid="44444444-4444-4444-4444-444444444444"><disabled>0</disabled><name>VPNGW</name><interface>ipsec1</interface><gateway>169.254.100.2</gateway><monitor_disable>1</monitor_disable><descr>VPN gateway</descr></gateway_item></Gateways>
+  </OPNsense>
+  <staticroutes><route uuid="55555555-5555-5555-5555-555555555555"><network>10.50.0.0/16</network><gateway>VPNGW</gateway><descr>Remote app network</descr><disabled>0</disabled></route></staticroutes>
+  <ipsec>
+    <phase1><ikeid>1</ikeid><iketype>ikev2</iketype><interface>wan</interface><encryption-algorithm><name>aes</name><keylen>256</keylen></encryption-algorithm><hash-algorithm>sha256</hash-algorithm><pre-shared-key>[REDACTED]</pre-shared-key><descr>Site-to-Site Example</descr><remote-gateway>198.51.100.10</remote-gateway></phase1>
+    <phase2><ikeid>1</ikeid><uniqid>p2-one</uniqid><mode>route-based</mode><descr>Remote</descr><tunnel_local>169.254.100.1</tunnel_local><tunnel_remote>169.254.100.2</tunnel_remote></phase2>
+  </ipsec>
+  <nat>
+    <outbound><mode>hybrid</mode>
+      <rule><source><network>10.50.0.0/16</network></source><destination><address>203.0.113.10/32</address></destination><descr>Partner Breakout</descr><interface>wan</interface><ipprotocol>inet</ipprotocol><target>wanip</target></rule>
+      <rule><source><network>lan</network></source><destination><network>EMPTY_NET</network></destination><interface>ipsec1</interface><ipprotocol>inet</ipprotocol><nonat>1</nonat></rule>
+    </outbound>
+    <rule><protocol>tcp</protocol><interface>wan</interface><associated-rule-id>nat_pf_1</associated-rule-id><target>192.0.2.50</target><local-port>443</local-port><source><any>1</any></source><destination><network>wanip</network><port>4443</port></destination><descr>Published service</descr></rule>
+  </nat>
+  <filter>
+    <rule uuid="66666666-6666-6666-6666-666666666666"><associated-rule-id>nat_pf_1</associated-rule-id><source><any>1</any></source><interface>wan</interface><protocol>tcp</protocol><destination><address>192.0.2.50</address><port>443</port></destination><descr>Published service</descr></rule>
+    <rule uuid="77777777-7777-7777-7777-777777777777"><type>pass</type><interface>enc0</interface><direction>in</direction><quick>1</quick><protocol>tcp</protocol><source><address>10.50.1.0/24</address></source><destination><address>203.0.113.10</address><port>443</port></destination><descr>Partner special flow</descr></rule>
+    <rule uuid="88888888-8888-8888-8888-888888888888"><type>pass</type><interface>lan</interface><source><network>lan</network></source><destination><any>1</any></destination><disabled>1</disabled><descr>Disabled test</descr></rule>
+  </filter>
+</opnsense>
