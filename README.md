@@ -44,6 +44,24 @@ KI ist später nur optional für sprachliche Glättung zulässig und darf keine 
 - relative Output-/Reportpfade werden PowerShell-nativ aufgelöst
 - Regression gegen den PowerShell-`List[object]`/`@(...)`-Engine-Bug
 
+### Phase 2 – Canonical Infrastructure Model
+
+- JSON Schema **1.0.0**
+- JSON Schema Draft 2020-12
+- strikter Root-Contract ohne stille Zusatzfelder
+- `CONFIRMED / DERIVED / INFERRED / FINDING`
+- Evidence / Provenance als Pflichtbestandteil technischer Records
+- stabile namespaced IDs plus SHA-256-Fallback
+- versionierte ID- und Canonicalization-Strategie
+- Referenzobjekte für Beziehungen zwischen technischen Records
+- `unresolvedReferences` statt still verworfener Referenzen
+- Asset-Enrichment mit eigener Confidence je Vendor / Device Type / Model
+- reproduzierbare JSON-Serialisierung
+- positive und negative Schema-Fixtures
+- eigene Schema-CI
+
+Details: [`docs/Phase-2-Canonical-Infrastructure-Model.md`](./docs/Phase-2-Canonical-Infrastructure-Model.md)
+
 ## Verwendung des Sanitizers
 
 ```powershell
@@ -64,6 +82,19 @@ pwsh -NoProfile `
   -ReportPath "./generated/sanitization-report.json"
 ```
 
+## Canonical Model Schema validieren
+
+```bash
+python -m pip install -r requirements-ci.txt
+python tools/validate_schema.py
+```
+
+Deterministische JSON-Serialisierung:
+
+```bash
+python tools/canonicalize_json.py input.json output.json
+```
+
 ## Sicherheit
 
 Eine originale OPNsense-`config.xml` enthält sensible Konfigurationsdaten und darf nicht in dieses öffentliche Repository committed werden.
@@ -80,19 +111,32 @@ Lokal mit Pester 5:
 Invoke-Pester -Path ./tests -CI
 ```
 
-Die CI testet auf Windows gegen:
+Die PowerShell-CI testet auf Windows gegen:
 
 - Windows PowerShell 5.1
 - PowerShell 7
+
+Die Schema-CI validiert zusätzlich:
+
+- JSON-Schema-Metaschema
+- gültige Modell-Fixtures
+- absichtlich ungültige Regression-Fixtures
+- reproduzierbare Canonical-JSON-Ausgabe
 
 ## Versionierung
 
 Das Projekt verwendet Semantic Versioning (`MAJOR.MINOR.PATCH`).
 
 - Repository-/Generatorversion: [`VERSION`](./VERSION)
-- Komponenten wie Sanitizer, Schema, Ruleset und Templates besitzen zusätzlich eigene Versionen.
+- Sanitizer: aktuell `1.1.0`
+- Canonical Infrastructure Model Schema: aktuell `1.0.0`
+- Stable-ID-Strategie: aktuell `1.0.0`
+- Canonicalization-Strategie: aktuell `1.0.0`
+- Komponenten wie Ruleset und Templates erhalten eigene Versionen.
 - Jeder spätere Dokumentbuild erhält ein Build-Manifest mit allen verwendeten Komponentenständen.
 
 ## Nächster Schritt
 
-Phase 2: Versioniertes `infrastructure-model.schema.json` als Canonical Infrastructure Model definieren.
+**Phase 3 – Core Parser**
+
+Als Nächstes werden System, Interfaces, VLANs, Gateways, statische Routen, Aliases, Firewall, NAT und IPsec deterministisch aus `config.sanitized.xml` in das Canonical Infrastructure Model überführt. Jeder Record muss dabei eine stabile ID und Evidence besitzen.
