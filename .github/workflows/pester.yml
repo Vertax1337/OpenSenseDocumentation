@@ -24,22 +24,33 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Install Pester 5
         shell: ${{ matrix.shell }}
         run: |
           $ErrorActionPreference = 'Stop'
+
+          if ($PSVersionTable.PSVersion.Major -le 5) {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Install-PackageProvider -Name NuGet -Scope CurrentUser -Force | Out-Null
+          }
+
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
           Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -MinimumVersion 5.5.0
           Import-Module Pester -MinimumVersion 5.5.0 -Force
+
           Write-Host "PowerShell: $($PSVersionTable.PSVersion)"
           Write-Host "Pester: $((Get-Module Pester).Version)"
+
       - name: Run Pester
         shell: ${{ matrix.shell }}
         run: |
           $ErrorActionPreference = 'Stop'
           Import-Module Pester -MinimumVersion 5.5.0 -Force
+
           $config = New-PesterConfiguration
           $config.Run.Path = './tests'
           $config.Run.Exit = $true
           $config.Output.Verbosity = 'Detailed'
+
           Invoke-Pester -Configuration $config
