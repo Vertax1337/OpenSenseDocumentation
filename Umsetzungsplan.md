@@ -1,15 +1,15 @@
 # Umsetzungsplan – OpenSenseDocumentation
 
-> **Status:** Source of Truth für die Entwicklung  
-> **Repository:** `Vertax1337/OpenSenseDocumentation` (GitHub bis zum verifizierten Azure-DevOps-Cutover)  
-> **Zielplattform:** Azure DevOps über die bestehende DevOps-Bootstrap-Struktur  
-> **Ziel:** Deterministische, reproduzierbare MSP-Kundendokumentation aus OPNsense-Konfigurationen erzeugen  
-> **Grundsatz:** Technische Fakten werden **nicht** durch ein LLM erfunden oder frei interpretiert. Parser, Regeln, Korrelation, Validierung, Diagramme und Dokumentstruktur müssen deterministisch sein.  
-> **Plattform-Grundsatz:** Azure-DevOps-Projekte, Repositories, Kunden-Trennung, zentrale Pipeline-Basis und übergeordnete Policies werden **nicht** in OpenSenseDocumentation neu erfunden. Dafür ist der bestehende DevOps-Bootstrap die übergeordnete Source of Truth.
+> **Status:** Verbindliche Source of Truth für die Entwicklung  
+> **Repository:** `Vertax1337/OpenSenseDocumentation`  
+> **Projektstand:** `0.3.0`  
+> **Aktuelle fachliche Phase:** Phase 4 – DHCP / Asset Inventory  
+> **CI/CD-Zielplattform:** Azure DevOps über die bestehende DevOps-Bootstrap-Struktur  
+> **Grundsatz:** Technische Fakten werden nicht durch ein LLM erfunden oder frei interpretiert. Parser, Regeln, Korrelation, Validierung, Diagramme und Dokumentstruktur müssen deterministisch sein.
 
 ---
 
-## 1. Zielbild
+# 1. Zielbild
 
 Aus einer OPNsense-`config.xml` soll automatisiert eine belastbare MSP-Betriebsdokumentation entstehen, mit der ein neuer Mitarbeiter ohne Vorwissen einen Kunden technisch einordnen, typische Störungen analysieren und Sonderkonfigurationen nachvollziehen kann.
 
@@ -36,9 +36,12 @@ infrastructure-model.json
         │
         ├───────────────┬────────────────┐
         ▼               ▼                ▼
-      Facts         Inferences        Findings
+      Facts          Derived         Inferences
         │               │                │
         └───────────────┴────────────────┘
+                        │
+                        ▼
+                Rule / Findings Engine
                         │
                         ▼
               Correlation / Flow Engine
@@ -58,22 +61,69 @@ infrastructure-model.json
                        PDF
 ```
 
-Optional kann eine KI **nachgelagert** Formulierungen verbessern oder Management-Zusammenfassungen erzeugen. Sie darf jedoch keine technischen Fakten hinzufügen oder verändern.
+Optional darf eine KI nachgelagert Formulierungen verbessern oder Management-Zusammenfassungen erzeugen. Sie darf jedoch keine technischen Fakten hinzufügen, verändern, priorisieren oder technische Beziehungen frei erfinden.
 
 ---
 
-# 2. Wichtigste Erkenntnisse aus dem Proof of Concept
+# 2. Nicht verhandelbare Architekturregeln
 
-## 2.1 Sanitizing statt direkter KI-Verarbeitung
+## 2.1 Eine technische Wahrheit
 
-Die originale `config.xml` ist vertraulich und darf nicht direkt an eine KI übergeben werden.
+`infrastructure-model.json` ist nach dem Parsing die einzige technische Datenquelle für:
 
-Die bereinigte XML bleibt erhalten, weil sie die vollständige OPNsense-Struktur bewahrt und damit als nachvollziehbare technische Zwischenquelle dient.
+- Tabellen
+- technische Texte
+- Quick Reference
+- Findings
+- Business Flows
+- Diagramme
+- spätere Infrastructure Diffs
+- DOCX/PDF-Rendering
 
-### Der Sanitizer muss mindestens behandeln
+Renderer dürfen `config.sanitized.xml` nicht direkt erneut interpretieren.
+
+## 2.2 Unknown wird erhalten, nicht erraten
+
+Wenn eine Beziehung oder ein Wert nicht eindeutig ableitbar ist:
+
+- kein wahrscheinlicher Wert einsetzen
+- keine Namensähnlichkeit als technische Zuordnung verwenden
+- keine physische Topologie erfinden
+- stattdessen `UNKNOWN`, `unresolvedReferences` oder einen späteren Review-/Finding-Zustand verwenden
+
+## 2.3 Active und Disabled strikt trennen
+
+Deaktivierte Regeln oder Dienste bleiben dokumentierbar, dürfen aber niemals als aktiver Flow oder aktiver Betriebszustand dargestellt werden.
+
+## 2.4 Gleicher Input muss gleiches Ergebnis erzeugen
+
+Für den semantischen Build gilt:
+
+```text
+gleiche sanitisierte Config
++ gleicher Sanitizer
++ gleicher Parser
++ gleiches Schema
++ gleiches Ruleset
++ gleiche Enrichment-Datenbasis
++ gleiches Template
++ gleiche Renderer-Version
+=
+gleiche technische Dokumentation
+```
+
+---
+
+# 3. Sanitizing und Sicherheitsgrenze
+
+Die originale `config.xml` ist vertraulich und wird niemals direkt als Dokumentationsinput an eine externe KI übergeben.
+
+Die sanitisierte XML ist **nicht anonymisiert**. Interne IP-Adressen, Netze, Hostnamen, Domains, MAC-Adressen, Aliases und technische Beschreibungen bleiben absichtlich erhalten, weil sie für die Dokumentation benötigt werden.
+
+## 3.1 Sanitizer muss mindestens behandeln
 
 - Passwörter und Passwort-Hashes
-- OTP-/TOTP-Seeds
+- OTP-/TOTP-/HOTP-Seeds
 - API-Keys und Tokens
 - Pre-Shared Keys
 - Private Keys
@@ -81,460 +131,63 @@ Die bereinigte XML bleibt erhalten, weil sie die vollständige OPNsense-Struktur
 - LDAP-/RADIUS-/SMTP-Credentials
 - WireGuard-/OpenVPN-/IPsec-Secrets
 - Business-Edition Subscription-/Activation-Key
-- eingebettete Credentials in Strings
-- zukünftige verdächtige Credential-Feldnamen
+- eingebettete Credentials in URLs oder Argumenten
+- bekannte Credential-Feldnamen von Plugins
 
-### Zusätzlich entfernen
+## 3.2 Zusätzlich entfernen
 
 - `created`
 - `updated`
 - `revision`
 
-Diese Audit-Blöcke enthalten unter anderem Administratornamen und Quell-IP-Adressen, sind für die technische Netzwerkdokumentation jedoch nicht erforderlich.
-
-### Wichtig
+## 3.3 Bedeutung von `Clean`
 
 `Clean` bedeutet:
 
-> Keine bekannten Secrets wurden nach der aktuellen Sanitizer-Regelbasis gefunden.
+> Nach der aktuellen Sanitizer-Regelbasis wurden keine bekannten Residual-Secrets gefunden.
 
-`Clean` bedeutet **nicht**:
+`Clean` bedeutet nicht:
 
-> Die Datei ist anonymisiert.
+> Die Datei enthält keine internen oder vertraulichen Infrastrukturinformationen.
 
-Interne IP-Adressen, Hostnamen, Domains, MAC-Adressen, Aliases und Netzwerkbezeichnungen bleiben absichtlich erhalten.
+## 3.4 Verbindliche Regression-Fixes
 
----
+Bereits aufgetreten und dauerhaft zu schützen:
 
-# 3. Bereits aufgetretene Fehler und verbindliche Gegenmaßnahmen
-
-## 3.1 Relative Output-Pfade
-
-### Fehler
-
-Relative Pfade wie:
-
-```powershell
-.\generated\config.sanitized.xml
-```
-
-führten in der ersten Version zu Fehlern bei `.NET Directory.CreateDirectory()`.
-
-### Gegenmaßnahme
-
-- PowerShell-native Pfadauflösung verwenden
-- `New-Item -ItemType Directory -Force`
-- explizit erkennen, wenn ein erwartetes Verzeichnis bereits als Datei existiert
+1. Relative Output-/Report-Pfade müssen funktionieren.
+2. Verzeichnisse werden PowerShell-nativ mit `New-Item -ItemType Directory -Force` angelegt.
+3. Ein erwartetes Verzeichnis, das als Datei existiert, muss zum Fehler führen.
+4. PowerShell-5.1-Generic-List-Regression verwendet `.ToArray()` statt `@($genericList)`.
+5. `system/firmware/subscription` wird pfadbezogen redigiert.
+6. Audit-Metadaten `created`, `updated`, `revision` werden entfernt.
+7. Embedded Credentials werden redigiert.
+8. Residual Scan entscheidet über `Clean`.
+9. Reports enthalten keine lokalen Vollpfade.
+10. Original-XML wird niemals überschrieben.
 
 ---
 
-## 3.2 PowerShell `List[object]` / `@(...)` Engine-Problem
+# 4. Canonical Infrastructure Model
 
-### Fehler
+## 4.1 Root-Struktur
 
-Kombinationen wie:
-
-```powershell
-$list = New-Object System.Collections.Generic.List[object]
-@($list)
-```
-
-führten unter Windows PowerShell 5.1 zu:
-
-```text
-Die Argumenttypen stimmen nicht überein.
-```
-
-### Gegenmaßnahme
-
-Verbindlich:
-
-```powershell
-$list.ToArray()
-```
-
-verwenden.
-
----
-
-## 3.3 Business Subscription-Key wurde zunächst nicht erkannt
-
-### Fehler
-
-`/opnsense/system/firmware/subscription` blieb zunächst erhalten.
-
-### Gegenmaßnahme
-
-Pfadbezogene Secret-Regel implementieren.
-
-Nicht pauschal jedes XML-Element namens `subscription` löschen, da Plugins harmlose gleichnamige Felder besitzen können.
-
----
-
-## 3.4 Lokale Vollpfade im Sanitization Report
-
-### Fehler
-
-Der Report enthielt lokale OneDrive-/Benutzerpfade.
-
-### Gegenmaßnahme
-
-Im Report nur speichern:
-
-- Dateiname
-- Dateigröße
-- SHA-256
-- Sanitizer-Version
-- Redaction Counts
-- Status
-
-Keine lokalen Vollpfade.
-
----
-
-## 3.5 Falscher DHCP-Pool durch Legacy-Konfiguration
-
-### Kritischer Fehler
-
-In der OPNsense-Config existierten gleichzeitig:
-
-- Legacy `<dhcpd>`-Konfiguration
-- aktive Kea-DHCPv4-Konfiguration
-
-Der erste Dokumentationslauf wertete den Legacy-Bereich aus und dokumentierte:
-
-```text
-192.168.1.10 - 192.168.1.245
-```
-
-Tatsächlich aktiv war Kea mit:
-
-```text
-192.168.1.50 - 192.168.1.199
-```
-
-### Gegenmaßnahme
-
-Der Generator darf XML-Blöcke nicht unabhängig voneinander als gleichwertig betrachten.
-
-Es wird eine **Authoritative-Service-Resolution** implementiert.
-
-Beispiel DHCP:
-
-```text
-Kea DHCP4 enabled = 1
-        │
-        ▼
-Kea ist authoritative Quelle
-für die dokumentierten LAN-DHCP-Daten
-        │
-        ▼
-Legacy dhcpd wird nur noch als
-Legacy-/Prüfkonfiguration ausgewiesen
-```
-
-Diese Prioritätslogik muss im Code stehen und darf nicht einem LLM überlassen werden.
-
----
-
-## 3.6 DHCP Reservations wurden zunächst übersehen
-
-### Erkenntnis
-
-Die Kea-Reservations sind eine wertvolle Infrastrukturquelle.
-
-Daraus lassen sich deterministisch entnehmen:
-
-- IP-Adresse
-- MAC-Adresse
-- Hostname
-- Beschreibung
-- Subnetz
-- DHCP-Kontext
-
-Beispiele aus dem Proof of Concept:
-
-- `Cisco-Phone-Adapter`
-- `Zentrale-TASKalfa3554ci`
-- mehrere `CDE4100x`-Geräte
-- abteilungsbezogene Drucker-/Gerätenamen
-
-### Konsequenz
-
-DHCP Reservations werden fester Bestandteil des Infrastruktur-/Asset-Inventars.
-
----
-
-## 3.7 OUI-Herstellerzuordnung
-
-### Erkenntnis
-
-Aus MAC-Adressen kann über eine versionierte OUI-Datenbasis der Hersteller abgeleitet werden.
-
-### Wichtig
-
-Der OUI beweist nur die Organisation / den Hersteller, **nicht** das konkrete Gerätemodell.
-
-Daher wird unterschieden:
-
-```text
-CONFIRMED
-IP, MAC, Hostname, DHCP Reservation
-
-DERIVED
-Hersteller via OUI
-
-INFERRED
-Gerätetyp aus Hostname/Beschreibung
-```
-
-Beispiel:
-
-```text
-Hostname: Zentrale-TASKalfa3554ci   -> confirmed
-Vendor: Kyocera                     -> derived via OUI
-Device Type: Printer                -> inferred from hostname
-Model: TASKalfa 3554ci              -> inferred from hostname
-```
-
----
-
-## 3.8 NAT und Firewall wurden isoliert statt als Flow dokumentiert
-
-### Fehler
-
-Die erste Dokumentation zeigte z. B. Afros und Tagetik nur als voneinander getrennte NAT- und Firewall-Regeln.
-
-Für einen neuen MSP-Mitarbeiter war nicht unmittelbar ersichtlich, dass diese gemeinsam einen Sonderpfad bilden.
-
-### Gegenmaßnahme
-
-Eine Correlation Engine muss zusammengehörige Objekte zu Business Flows verbinden.
-
-Beispiel:
-
-```text
-Azure APP
-10.43.0.0/24
-     │
-     ▼
-IPsec / enc0
-     │
-     ▼
-Firewall Allow
-10.43.0.0/24 -> 85.32.49.226
-     │
-     ▼
-Outbound NAT
-10.43.0.0/16 -> 85.32.49.226/32
-SNAT -> WAN-IP
-     │
-     ▼
-Internet / Afros
-```
-
----
-
-## 3.9 Unterschiedliche Source Scopes müssen Findings erzeugen
-
-Im Afros-/Tagetik-Beispiel:
-
-```text
-Firewall Source: 10.43.0.0/24
-NAT Source:      10.43.0.0/16
-```
-
-Dies darf nicht still vereinheitlicht werden.
-
-Der Generator erzeugt stattdessen ein Finding:
-
-```text
-Source scopes differ between firewall and NAT rules.
-Verify whether this is intentional.
-```
-
----
-
-## 3.10 Generative Diagramme dürfen keine technischen Werte erzeugen
-
-### Kritischer Fehler
-
-Ein optisch sehr professionelles generatives Diagramm erfand unter anderem:
-
-- nicht vorhandene Interface-Namen
-- falsche VLAN-ID
-- falsche IP-Netze
-- falsche Azure-Netze
-- nicht bestätigte WAN-Adressen
-
-### Konsequenz
-
-Generative Bildmodelle werden **nicht** für technische Netzdiagramme verwendet.
-
-Diagramme werden ausschließlich aus `infrastructure-model.json` erzeugt.
-
-Erlaubt ist nur deterministisches Styling.
-
----
-
-## 3.11 Netzwerkübersicht darf zwischen Dokumentversionen nicht verschwinden
-
-### Fehler
-
-Bei einer Dokumentrevision wurde die professionelle Gesamt-Netzwerkübersicht nicht mehr eingebettet.
-
-### Gegenmaßnahme
-
-Die Dokumentstruktur ist versioniert und fest definiert.
-
-Pflichtseiten dürfen nicht dynamisch entfallen.
-
----
-
-# 4. Architekturprinzipien
-
-## 4.1 Eine einzige technische Wahrheit
-
-`infrastructure-model.json` ist die einzige Quelle für:
-
-- Tabellen
-- Texte
-- Diagramme
-- Findings
-- Business Flows
-- Quick Reference
-- spätere Diffs
-
-Dokument und Diagramm dürfen niemals unterschiedliche Datenquellen verwenden.
-
----
-
-## 4.2 Facts, Derived Data, Inferences und Findings strikt trennen
-
-### Fact
-
-Direkt aus der Config belegt.
-
-Beispiel:
-
-```text
-LAN IPv4 = 192.168.1.1/24
-```
-
-### Derived
-
-Deterministisch aus einem Fakt + definierter Datenbasis abgeleitet.
-
-Beispiel:
-
-```text
-MAC OUI -> Hersteller Kyocera
-```
-
-### Inference
-
-Plausible Interpretation, deren Basis transparent ausgewiesen wird.
-
-Beispiel:
-
-```text
-Hostname enthält TASKalfa3554ci -> wahrscheinlich Kyocera-Drucker
-```
-
-### Finding
-
-Technischer Prüfpunkt, Konflikt oder bekannte Abweichung.
-
-Beispiel:
-
-```text
-Gateway Monitoring disabled
-```
-
-oder:
-
-```text
-Firewall /24 differs from NAT /16
-```
-
----
-
-## 4.3 Verantwortungsgrenze zu Azure DevOps
-
-OpenSenseDocumentation ist **nicht** für den Aufbau einer eigenen Azure-DevOps-Projekt- oder Kundenstruktur verantwortlich.
-
-Verbindlich gilt:
-
-> **Azure DevOps Deployment erfolgt über die bestehende DevOps-Bootstrap-Struktur.**
-
-Der DevOps-Bootstrap ist die übergeordnete Source of Truth für:
-
-- Azure-DevOps-Projekt- und Repository-Struktur
-- standardisierte Kunden-Trennung
-- zentrale Pipeline-Grundstruktur und wiederverwendbare Pipeline-Templates
-- übergeordnete Repository-/Branch-/Policy-Konfiguration
-- Bereitstellung der vorgesehenen Ziel-Repositories
-
-OpenSenseDocumentation ist dagegen verantwortlich für:
-
-- Sanitizer
-- Canonical Infrastructure Model
-- Parser
-- Rule-/Correlation-Engine
-- Enrichment
-- Validierung
-- Diagramm- und Dokument-Renderer
-- fachliche Testfälle und Golden Files
-- den technischen Pipeline-Contract für den Dokumentationsbuild
-
-Dadurch wird keine zweite Bootstrap-/Kundenlogik innerhalb dieses Repositories aufgebaut.
-
-Eine separate Migrationsphase zur Neuerfindung der Azure-DevOps-Struktur ist **nicht** Bestandteil dieses Projekts. Die Migration des Repositories wird als Deployment-/Plattformaufgabe innerhalb der bestehenden Bootstrap-Struktur durchgeführt.
-
----
-
-# 5. Provenance / Evidence
-
-Jedes relevante Objekt muss seine Quelle kennen.
-
-Beispiel:
-
-```json
-{
-  "network": "10.43.0.0/16",
-  "gateway": "VPNGW",
-  "description": "Azure APP vNet",
-  "status": "active",
-  "evidence": {
-    "source": "config.sanitized.xml",
-    "xpath": "/opnsense/staticroutes/route[...]"
-  }
-}
-```
-
-Ziel:
-
-> Jede Aussage in der Dokumentation soll bei Bedarf bis zur XML-Quelle zurückverfolgbar sein.
-
----
-
-# 6. Canonical Infrastructure Model
-
-## 6.1 Ziel
-
-Die XML bleibt vollständig erhalten, wird aber zusätzlich in ein stabiles, versioniertes Dokumentationsmodell überführt.
-
-### Beispielstruktur
+Das versionierte Modell enthält mindestens:
 
 ```json
 {
   "schemaVersion": "1.0.0",
+  "modelId": "...",
+  "producer": {},
   "source": {},
   "system": {},
   "interfaces": [],
   "networks": [],
   "vlans": [],
-  "dhcp": {},
+  "dhcp": {
+    "services": [],
+    "scopes": [],
+    "reservations": []
+  },
   "assets": [],
   "dns": {},
   "aliases": [],
@@ -548,299 +201,416 @@ Die XML bleibt vollständig erhalten, wird aber zusätzlich in ein stabiles, ver
   "cronJobs": [],
   "certificates": [],
   "businessFlows": [],
-  "findings": []
+  "findings": [],
+  "unresolvedReferences": []
 }
 ```
 
----
+## 4.2 Klassifikationen
 
-# 7. Deterministische Regeln
+### CONFIRMED
 
-Diese Regeln müssen als Code / Rule Engine umgesetzt werden.
+Direkt aus der sanitisieren OPNsense-Konfiguration belegt.
 
-## 7.1 DHCP
+### DERIVED
 
-- aktive DHCP-Implementierung eindeutig bestimmen
-- Kea aktiv -> Kea authoritative
-- Legacy `dhcpd` nur als Legacy/Review anzeigen
-- Pool muss innerhalb des Subnetzes liegen
-- Gateway/DNS/Domain/NTP übernehmen
-- Reservations vollständig auslesen
-- Reservations außerhalb Pool sind zulässig, aber dokumentieren
-- doppelte IP-/MAC-/Hostname-Kollisionen als Findings melden
+Deterministisch aus bestätigten/abgeleiteten Eingaben und einer versionierten Regel oder Datenbasis berechnet.
 
-## 7.2 Firewall
+Beispiele:
 
-- `disabled=1` niemals als aktiven Flow darstellen
-- Action, Interface, Direction, Protocol, Source, Destination, Port exakt übernehmen
-- Associated NAT Rule verknüpfen
-- `any` nicht umformulieren
-- Reihenfolge erhalten, sofern für Bewertung relevant
+- Interface-IP + Prefix → Network CIDR
+- MAC OUI → Hersteller
 
-## 7.3 NAT
+### INFERRED
 
-- Inbound / Port Forward
-- Outbound NAT
-- No-NAT
-- Disabled Rules strikt getrennt
-- NAT und Firewall miteinander korrelieren
+Deterministische, aber interpretative Einordnung aus expliziten Eingangsdaten.
 
-## 7.4 Interfaces
+Beispiel:
 
-- Interface ohne bestätigte IP != bestätigtes L3-Netz
-- WAN DHCP/DHCPv6 -> aktuelle IP nicht erfinden
-- virtuelle Interfaces klar markieren
-- VTI / IPsec Interfaces erkennen
+- Hostname enthält `TASKalfa3554ci` → wahrscheinlich `Printer`, Modell `TASKalfa 3554ci`
 
-## 7.5 Aliases
+### FINDING
 
-- leerer Alias bleibt leer / unresolved
-- keine Inhalte erfinden
-- external aliases als dynamisch kennzeichnen
-- Alias-Verwendung in Firewall/NAT referenzieren
+Ergebnis einer Rule Engine. Findings besitzen stabile Rule-ID, Severity, betroffene Referenzen und Evidence.
 
-## 7.6 DNS
+## 4.3 Evidence / Provenance
 
-- System DNS
-- Unbound Status
-- Conditional Forwarding
-- DNSBL / SafeSearch
-- Forward Target mit Routing/VPN korrelieren
+Jeder relevante technische Record muss auf seine Quelle zurückführbar sein.
 
-## 7.7 VPN / Routing
+Beispiel:
 
-- Phase 1 / Phase 2
-- route-based / policy-based unterscheiden
-- VTI und Gateway zusammenführen
-- statische Routen über Gateway referenzieren
-- Monitoring Status auswerten
+```json
+{
+  "sourceType": "opnsense-config",
+  "sourceId": "config.sanitized.xml",
+  "path": "/opnsense/staticroutes/route[3]",
+  "sourceSha256": "..."
+}
+```
 
-## 7.8 Certificates
+## 4.4 Stable IDs
 
-- öffentliche X.509-Zertifikate programmatisch dekodieren
-- Subject / SAN
-- NotBefore / NotAfter
-- Issuer
-- Self-Signed
-- Ablaufstatus
-- privater Schlüssel bleibt redigiert
+Priorität:
 
-## 7.9 Services
+1. stabile OPNsense-UUID / natürlicher Schlüssel / Interface-Name
+2. deterministischer SHA-256-Fallback aus dokumentierter Identity-Tuple
 
-Aktivitätsstatus ermitteln für z. B.:
+## 4.5 Kein stiller Schema-Drift
 
-- CrowdSec
-- Unbound
-- DNSBL
-- Zenarmor
-- Monit
-- Netdata
-- HAProxy
-- Apache
-- ACME
-- WireGuard
-- OpenVPN
+Wenn ein Parser ein neues Modellfeld benötigt:
 
-Keine reine Plugin-Liste mit „installiert“ mit „aktiv“ verwechseln.
-
-## 7.10 Cron / Maintenance
-
-- aktive und deaktivierte Jobs trennen
-- Firmware Auto Update dokumentieren
-- Reboot Jobs dokumentieren
-- Plugin Periodicals dokumentieren
+1. Schema anpassen
+2. Fixtures ergänzen
+3. Versionierung prüfen
+4. Dokumentation anpassen
+5. erst danach den Parser ändern
 
 ---
 
-# 8. Asset-/Infrastruktur-Inventar
+# 5. Core-Parser-Regeln
 
-DHCP Reservations werden als eigenes Infrastrukturmodell behandelt.
+## 5.1 Harte Eingangsbedingungen
 
-## 8.1 Felder
+Der Parser verarbeitet eine sanitisierte Datei nur, wenn:
+
+```text
+sanitization-report.status == Clean
+residualFindings == 0
+report.output.sha256 == tatsächliche XML-SHA256
+XML Root == <opnsense>
+```
+
+Andernfalls: Build-Abbruch.
+
+## 5.2 Interfaces
+
+- WAN DHCP/DHCP6 speichert nur den konfigurierten dynamischen Zustand.
+- Eine aktuelle WAN-IP wird niemals erfunden.
+- Statische Interface-IP + Prefix dürfen deterministisch zu einem Netzwerk-CIDR abgeleitet werden.
+- Interface ohne bestätigte L3-Adresse ist kein bestätigtes L3-Netz.
+
+## 5.3 VLAN
+
+- Zuordnung ausschließlich über explizite Device-/Parent-Information.
+- Unklare Referenz → `unresolvedReferences`.
+
+## 5.4 Gateway / Static Routes
+
+- Routen referenzieren Gateways über Stable IDs.
+- Unbekanntes Gateway wird nicht geraten.
+
+## 5.5 Route-based IPsec
+
+Öffentliche Phase-1-Gegenstelle, lokale/remote VTI-Adresse, Tunnel-Interface und Gateway bleiben getrennte technische Fakten.
+
+Eine VTI-/Gateway-Verknüpfung erfolgt nur bei eindeutiger Übereinstimmung, z. B.:
+
+```text
+phase2.tunnel_remote == gateway.address
+```
+
+## 5.6 NAT / Firewall
+
+- Disabled State erhalten.
+- Firewall-Reihenfolge erhalten.
+- NAT/Firewall-Association nur über explizite IDs/Referenzen.
+- Business-Flow-Korrelation erfolgt erst in Phase 7.
+
+---
+
+# 6. DHCP – verbindliche Fachregeln für Phase 4
+
+Der DHCP-Parser liest Konfiguration. Die Entscheidung, welche Implementierung authoritative ist, erfolgt separat über die Service-Resolution.
+
+## 6.1 Kea und Legacy werden beide erhalten
+
+Nicht:
+
+```text
+Kea gefunden → Legacy löschen
+```
+
+sondern:
+
+```text
+Kea Facts
++
+Legacy Facts
+      │
+      ▼
+Authoritative Service Resolution
+```
+
+## 6.2 Authoritative Resolution erfolgt pro Interface
+
+Beispiel:
+
+```text
+Kea DHCPv4 enabled
+AND
+LAN ist Kea zugewiesen
+→ Kea authoritative für LAN/IPv4
+```
+
+Eine vorhandene Legacy-LAN-Konfiguration bleibt erhalten, wird aber als `legacy=true`, `authoritative=false` dokumentiert.
+
+## 6.3 Kritische Regression
+
+Der bereits aufgetretene Fehler darf niemals zurückkehren:
+
+```text
+Legacy Pool: 192.168.1.10 - 192.168.1.245
+Kea Pool:    192.168.1.50 - 192.168.1.199
+Kea enabled auf LAN
+
+EXPECTED:
+Authoritative Pool = Kea .50 - .199
+```
+
+## 6.4 DHCP Scope
+
+Pro Scope dokumentieren:
+
+- Service
+- Interface
+- Subnet
+- Pool(s)
+- Gateway
+- DNS
+- Domain Name
+- Search Domains
+- NTP
+- Lease Time
+- Evidence
+
+## 6.5 Reservations
+
+Reservations sind zunächst ausschließlich Source-Facts:
 
 - IP
 - MAC
 - Hostname
 - Description
-- Subnet
-- DHCP Source
-- Vendor
-- Vendor Confidence
-- Device Type
-- Device Type Confidence
+- Service
+- Scope
 - Evidence
 
-## 8.2 Confidence Levels
-
-```text
-CONFIRMED
-Direkt aus OPNsense
-
-DERIVED
-Deterministisch mit versionierter externer Datenbasis
-
-INFERRED
-Interpretation aus Hostname/Beschreibung
-
-UNKNOWN
-Nicht belastbar ableitbar
-```
+Der Reservation-Parser darf aus Hostnamen noch keinen Gerätetyp ableiten.
 
 ---
 
-# 9. Versionierte OUI-Datenbank
+# 7. Asset Inventory und Enrichment
 
-Für reproduzierbare Ergebnisse wird keine Live-OUI-API bei jedem Build verwendet.
+## 7.1 Asset Builder
 
-Stattdessen:
-
-```text
-data/
-└── oui/
-    └── oui-YYYY-MM.csv
-```
-
-Das Build Manifest referenziert die verwendete OUI-Version.
-
-Damit gilt:
+Primäre Asset-Identität:
 
 ```text
-gleiche Config
-+ gleicher Parser
-+ gleiches Ruleset
-+ gleiche OUI DB
-+ gleiches Template
-=
-gleiche Dokumentation
+MAC vorhanden
+→ normalisierte MAC als bevorzugte Identität
+
+keine MAC
+→ deterministische Reservation-/Scope-/IP-Identität
 ```
+
+## 7.2 OUI Enrichment
+
+Keine Live-API während eines normalen Builds.
+
+Stattdessen versionierte lokale Datenbasis:
+
+```text
+data/oui/
+├── oui-YYYY-MM.csv
+└── manifest.json
+```
+
+Der Hersteller ist `DERIVED`, nicht `CONFIRMED`.
+
+Für lokal administrierte/randomisierte oder nicht sinnvoll auflösbare MACs wird kein Hersteller geraten.
+
+## 7.3 Device-Type-/Model-Inference
+
+Ausschließlich versionierte, deterministische Regeln.
+
+Beispiel:
+
+```text
+Hostname: Zentrale-TASKalfa3554ci
+Hostname                 = CONFIRMED
+Vendor Kyocera           = DERIVED via OUI
+Device Type Printer      = INFERRED via Namensregel
+Model TASKalfa 3554ci    = INFERRED via Namensregel
+```
+
+Wenn die Quelle keine belastbare Einordnung erlaubt, bleibt der Wert `UNKNOWN`.
 
 ---
 
-# 10. Business-Flow Engine
+# 8. Validierung
 
-## 10.1 Ziel
+## 8.1 Harte Fehler
 
-Ein Techniker soll Sonderkonfigurationen sofort als vollständigen Datenfluss erkennen.
+Beispiele:
 
-Nicht nur Einzelregeln auflisten.
+- Residual Secret
+- ungültiges Canonical Model
+- DHCP Pool außerhalb des Subnetzes
+- Pool Start > Pool End
+- gleiche Reservation-IP mit unterschiedlichen MACs im gleichen Scope
+- nicht eindeutige authoritative DHCP-Resolution
+- nicht auflösbare Pflichtreferenz, sofern sie für einen belastbaren Build zwingend erforderlich ist
 
-## 10.2 Beispiel-Flows aus dem Proof of Concept
+Harte Fehler führen zu:
 
-### FLOW-AFROS
+```text
+BUILD FAILED
+```
 
-- Origin: Azure APP
-- VPN / ingress: IPsec / enc0
-- Firewall Source: `10.43.0.0/24`
-- Destination: `85.32.49.226`
-- Outbound NAT Source: `10.43.0.0/16`
-- NAT Translation: WAN IP
-- Egress: WAN
-- Finding: Firewall /24 vs NAT /16
+## 8.2 Review-Zustände
 
-### FLOW-TAGETIK
+Technisch mögliche, aber prüfenswerte Situationen dürfen das Modell erhalten.
 
-Analog Afros mit Ziel `93.51.162.71`.
+Beispiele:
 
-### FLOW-ALARM
+- gleicher Hostname auf mehreren MACs
+- Legacy-Konfiguration parallel zu einer eindeutig aktiven Implementierung
+- Reservation außerhalb des dynamischen Pools, aber innerhalb des Subnetzes
+
+## 8.3 Keine Fehlklassifikation
+
+Eine Reservation außerhalb des dynamischen Pools ist nicht automatisch ein Fehler.
+
+---
+
+# 9. DNS / Services / Monitoring – Ziel Phase 5
+
+Auswerten:
+
+- System DNS
+- Unbound
+- Conditional Forwarding
+- DNSBL / SafeSearch
+- CrowdSec
+- Zenarmor
+- Netdata
+- Monit
+- HAProxy
+- Apache
+- ACME
+- WireGuard / OpenVPN, soweit vorhanden
+- Cron Jobs
+
+Installiert und aktiv müssen getrennt bewertet werden.
+
+---
+
+# 10. Certificates – Ziel Phase 6
+
+Öffentliche Zertifikatsdaten programmatisch dekodieren:
+
+- Subject
+- SAN
+- Issuer
+- Not Before
+- Not After
+- Self-Signed
+- Status
+- Used-By-Referenzen
+
+Private Keys bleiben redigiert.
+
+---
+
+# 11. Business-Flow Engine – Ziel Phase 7
+
+Ein Techniker soll Sonderkonfigurationen als vollständigen Datenfluss erkennen, nicht nur als isolierte NAT-/Firewall-/Routing-Regeln.
+
+Beispiele aus dem Proof of Concept:
+
+## FLOW-AFROS
+
+- Origin Azure APP
+- VPN / ingress IPsec
+- Firewall Source `10.43.0.0/24`
+- Destination `85.32.49.226`
+- Outbound NAT Source `10.43.0.0/16`
+- SNAT WAN-IP
+- Egress WAN
+
+## FLOW-TAGETIK
+
+Analog mit Ziel `93.51.162.71`.
+
+## FLOW-ALARM
 
 - Internet
 - WAN TCP/UDP 54123
 - Port Forward
 - internes Ziel `192.168.1.201:54123`
 
-### FLOW-DNS-AD
+## FLOW-DNS
 
-- Domain `cannon.local`
-- Unbound Conditional Forward
-- `10.41.1.4:53/TCP`
-- Route über Azure DC vNet / VPNGW
+- Conditional Forward
+- Zielserver
+- Route
+- Gateway
+- VPN
 
-### FLOW-AZURE-NONAT
+## FLOW-AZURE-NONAT
 
 - LAN
 - Alias `AZURE_NETZ`
 - No-NAT
-- Interface `ipsec1`
-- leerer/unaufgelöster Alias als Finding
+- IPsec Interface
+- leerer/unaufgelöster Alias bleibt Review-/Finding-Kandidat
 
 ---
 
-# 11. Findings Engine
+# 12. Findings Engine – Ziel Phase 8
 
-Findings werden priorisiert.
+## P1
 
-## P1 – Kritisch / kurzfristig prüfen
+Build oder technische Belastbarkeit gefährdet.
 
 Beispiele:
 
-- technisch widersprüchliche aktive Konfiguration
-- Secret-Residual gefunden
-- aktiver DHCP-Dienst nicht eindeutig bestimmbar
-- fehlerhafte Route-/Gateway-Referenz
-- Dokumentbuild wäre faktisch nicht belastbar
+- Residual Secret
+- widersprüchliche aktive Konfiguration
+- DHCP authoritative nicht eindeutig
+- ungültige Pflichtreferenz
 
-## P2 – Betriebsrelevant
+## P2
+
+Betriebsrelevant.
 
 Beispiele:
 
 - Gateway Monitoring deaktiviert
-- abgelaufenes Zertifikat
+- abgelaufenes verwendetes Zertifikat
 - breite WAN-Freigabe
-- leere aktive Aliases
-- Firewall/NAT Scope-Unterschiede
+- leerer aktiver Alias
+- Firewall-/NAT-Scope-Unterschied
 
-## P3 – Dokumentations-/Optimierungspunkt
+## P3
+
+Dokumentations-/Optimierungspunkt.
 
 Beispiele:
 
-- Legacy-Konfiguration vorhanden
+- Legacy-Konfiguration
 - unbeschriebene Rules
-- fehlende Business-Beschreibung
 - nicht zuordenbare Assets
+- fehlende Business-Beschreibung
 
 ---
 
-# 12. Validierung vor Dokumenterstellung
+# 13. Dokumentstruktur – Ziel Phase 10
 
-Vor DOCX/PDF muss ein deterministischer Validator laufen.
-
-## Pflichtprüfungen
-
-```text
-[ ] Sanitizer Status Clean
-[ ] Keine Residual Secrets
-[ ] Infrastructure Model gegen JSON Schema valide
-[ ] Aktiver DHCP-Dienst eindeutig bestimmt
-[ ] DHCP Pools innerhalb Subnetzen
-[ ] Reservations ohne Konflikte
-[ ] Alle aktiven Firewallregeln verarbeitet
-[ ] Alle aktiven NAT-Regeln verarbeitet
-[ ] Disabled Rules nicht in Active Flows
-[ ] Alle Gateways auflösbar
-[ ] Alle statischen Routen referenzieren bekannte Gateways
-[ ] Business Flow Referenzen konsistent
-[ ] Diagramme verwenden ausschließlich Model IDs
-[ ] Keine nicht belegten Werte im Dokument
-```
-
-Bei P1-Validierungsfehlern:
-
-```text
-BUILD FAILED
-```
-
-Keine möglicherweise falsche Kundendokumentation erzeugen.
-
----
-
-# 13. Dokumentstruktur – MSP Operational Documentation
-
-Die Kapitelstruktur wird fest versioniert.
-
-## Pflichtstruktur
+Pflichtstruktur:
 
 1. Titelblatt
-2. Quick Reference / Übersichtsseite
+2. Quick Reference
 3. Netzwerkübersicht – Gesamtbild
 4. Inhaltsverzeichnis
 5. Systemübersicht
@@ -862,50 +632,19 @@ Die Kapitelstruktur wird fest versioniert.
 21. Nicht aus OPNsense ableitbar
 22. Build-/Quelleninformationen
 
-## Verbindliche Layout-Regel
-
-**Jedes Hauptkapitel beginnt auf einer neuen Seite.**
-
-Technische Umsetzung im DOCX-Renderer:
+Verbindliche Layout-Regel:
 
 ```text
-Heading 1 -> pageBreakBefore = true
+Heading 1 → pageBreakBefore = true
 ```
 
-Ausnahmen:
-
-- Titelblatt
-- Quick Reference
-- Inhaltsverzeichnis
+Pflichtseiten dürfen zwischen Dokumentversionen nicht versehentlich verschwinden.
 
 ---
 
-# 14. Quick Reference
+# 14. Netzwerkdiagramme – Ziel Phase 9
 
-Die Quick-Reference-Seite muss einem neuen Mitarbeiter innerhalb von 1–2 Minuten beantworten:
-
-- Welche Firewall?
-- Welche primären Netze?
-- Wie erfolgt Internetzugang?
-- Welche VPNs existieren?
-- Welche Azure-/Remote-Netze existieren?
-- Welcher DHCP-Dienst ist aktiv?
-- Welche kritischen Sonderflows existieren?
-- Welche Security-Systeme sind aktiv?
-- Wie wird überwacht?
-- Welche P1/P2 Findings existieren?
-
----
-
-# 15. Netzwerkdiagramme
-
-## 15.1 Kein generatives Bildmodell für technische Inhalte
-
-Nicht erlaubt:
-
-```text
-Prompt -> Image AI -> technisches Diagramm
-```
+Generative Bildmodelle dürfen keine technischen Diagramminhalte erzeugen.
 
 Erlaubt:
 
@@ -919,250 +658,76 @@ Deterministic Diagram Renderer
         └─ optional draw.io
 ```
 
-## 15.2 Standardisierte Symboltypen
-
-- Internet / Provider -> Cloud
-- Firewall -> Firewall Appliance
-- Switch -> Switch
-- Server -> Server
-- Client -> Endpoint
-- Printer -> Printer
-- Access Point -> Wireless AP
-- VPN -> Tunnel / Lock
-- Azure -> Azure Cloud
-- Network -> Security Zone
-
-## 15.3 Darstellungsregeln
-
-- bestätigte Verbindungen: durchgezogen
-- abgeleitete Beziehungen: klar markiert
-- unbestätigte L3-Zuordnung: gestrichelt
-- deaktivierte Flows nicht als aktiv darstellen
-- Unknown nicht durch Fantasiewerte ersetzen
-
-## 15.4 Pflichtdiagramme
+Pflichtdiagramme:
 
 1. Gesamt-Netzwerkübersicht
 2. Routing/VPN-Detail
 3. Business-Flow-Diagramm
 
-Optional später:
+Darstellungsprinzipien:
 
-4. Asset-/DHCP-Map
-5. Security-Service-Map
+- confirmed Beziehungen: eindeutig
+- derived/inferred Beziehungen: unterscheidbar
+- unbestätigte L3-Zuordnung: nicht als bestätigte Verbindung darstellen
+- disabled Flows: nicht als aktiv darstellen
+- Diagramme verwenden ausschließlich Model IDs
 
 ---
 
-# 16. Management / Administration
+# 15. Monitoring / Administration
 
-Dokumentieren, soweit aus der Config ableitbar:
+Soweit aus der Config ableitbar:
 
-- WebGUI HTTPS
-- Management Interface / Bindings
-- Auth Backend
-- TOTP/MFA vorhanden
-- SSH aktiv/deaktiviert
+- WebGUI-Protokoll / Bindings
+- Auth Backends
+- MFA/TOTP vorhanden
+- SSH Status
 - administrative lokale Accounts ohne Secrets
-- Management-Dienste
-- Netdata
-- Monit
+- Monitoring-Komponenten
+- Alerting-Empfänger
+- CPU/RAM/Disk Thresholds
+- Gateway-/VPN-Monitoring
 
-Nicht automatisch ableitbar:
+Nicht aus der Config geraten werden:
 
 - Password Vault Location
 - Break-Glass-Prozess
-- Remote Support Tool
-- MSP Eskalationspfad
+- Remote-Support-Tool
+- MSP-Eskalationspfad
 
-Diese werden als manuelle Metadatenfelder vorgesehen.
-
----
-
-# 17. Monitoring / Alerting
-
-Auswerten:
-
-- Monit enabled
-- Interval
-- SMTP Relay
-- aktive Empfänger
-- überwachte Ressourcen
-- CPU/RAM/Disk Thresholds
-- Gateway Monitoring
-- VPN Monitoring
-- Netdata
-
-Automatisches Finding bei:
-
-```text
-VPN / Gateway aktiv
-AND
-Gateway Monitoring disabled
-AND
-kein alternativer aktiver VPN-Monitor erkannt
-```
+Dafür sind später manuelle Metadaten vorgesehen.
 
 ---
 
-# 18. Security Services
+# 16. Build Manifest
 
-Eigene Übersicht für aktive Security-Komponenten.
-
-Beispiele:
-
-- CrowdSec Agent
-- CrowdSec LAPI
-- CrowdSec Firewall Bouncer
-- Unbound DNSBL
-- SafeSearch
-- Zenarmor
-- IDS/IPS, soweit belastbar ableitbar
-
-Installierte Plugins werden getrennt von aktiven Diensten ausgewiesen.
-
----
-
-# 19. Zertifikate
-
-Öffentliche Zertifikatsdaten programmatisch dekodieren.
-
-Dokumentieren:
-
-- Purpose / Description
-- Subject
-- SAN
-- Issuer
-- Not Before
-- Not After
-- Self-Signed
-- Status
-
-Finding erzeugen für:
-
-- abgelaufen
-- läuft kurzfristig ab
-- WebGUI verwendet abgelaufenes Zertifikat
-- ACME deaktiviert, sofern relevant
-
----
-
-# 20. Build Manifest
-
-Jeder Build erhält ein Manifest.
-
-Beispiel:
+Jeder produktive Dokumentbuild erhält ein Manifest, z. B.:
 
 ```json
 {
-  "customer": "cannon.internal",
   "source": {
     "file": "config.xml",
     "sha256": "..."
   },
-  "sanitizer": "1.0.3",
-  "parser": "1.0.0",
+  "sanitizer": "1.1.0",
+  "parser": "...",
+  "ruleset": "...",
   "schema": "1.0.0",
-  "ruleset": "1.0.0",
-  "template": "1.0.0",
-  "diagramTheme": "1.0.0",
-  "ouiDatabase": "2026-08"
+  "template": "...",
+  "diagramTheme": "...",
+  "ouiDatabase": "..."
 }
 ```
 
-Ziel:
-
-> Jeder Dokumentstand muss reproduzierbar sein.
+Build-Zeitstempel gehören in das Manifest, nicht in `infrastructure-model.json`.
 
 ---
 
-# 21. Repository-Struktur
+# 17. Teststrategie
 
-Die folgende Struktur beschreibt **nur das OpenSenseDocumentation-Tooling-Repository**. Die Azure-DevOps-Projektstruktur und die kundenbezogene Repository-Erzeugung liegen außerhalb dieses Repositories und werden durch den bestehenden DevOps-Bootstrap bereitgestellt.
+## 17.1 Sanitizer
 
-```text
-OpenSenseDocumentation/
-│
-├── src/
-│   ├── Sanitizer/
-│   │   └── Sanitize-OPNsenseConfig.ps1
-│   │
-│   ├── Parser/
-│   │   ├── System/
-│   │   ├── Interfaces/
-│   │   ├── DHCP/
-│   │   ├── DNS/
-│   │   ├── Firewall/
-│   │   ├── NAT/
-│   │   ├── Routing/
-│   │   ├── VPN/
-│   │   ├── Services/
-│   │   ├── Monitoring/
-│   │   ├── Certificates/
-│   │   └── Cron/
-│   │
-│   ├── Rules/
-│   │   ├── ServiceResolution/
-│   │   ├── FlowCorrelation/
-│   │   ├── Findings/
-│   │   └── Validation/
-│   │
-│   ├── Enrichment/
-│   │   └── OUI/
-│   │
-│   ├── Renderer/
-│   │   ├── Document/
-│   │   └── Diagram/
-│   │
-│   └── Build/
-│
-├── schemas/
-│   └── infrastructure-model.schema.json
-│
-├── data/
-│   └── oui/
-│
-├── templates/
-│   ├── document/
-│   └── diagrams/
-│
-├── assets/
-│   └── icons/
-│
-├── tests/
-│   ├── Fixtures/
-│   ├── Expected/
-│   └── Integration/
-│
-├── docs/
-│
-├── output/
-│   └── .gitkeep
-│
-├── README.md
-└── Umsetzungsplan.md
-```
-
-### 21.1 Azure-DevOps-Einordnung
-
-Nach dem Cutover wird dieses Repository in das durch den DevOps-Bootstrap vorgesehene Azure-Repos-Ziel überführt.
-
-Nicht Bestandteil von OpenSenseDocumentation sind:
-
-- Erzeugung von Kundenprojekten
-- Erzeugung kundenspezifischer Firewall-Repositories
-- Definition einer konkurrierenden Projekt-/Repo-Namenskonvention
-- Aufbau einer zweiten Pipeline-Template-Plattform
-- Aufbau einer zweiten Branch-/Policy-Bootstrap-Logik
-
-Diese Aufgaben bleiben beim DevOps-Bootstrap.
-
----
-
-# 22. Teststrategie
-
-## 22.1 Sanitizer Tests
-
-Fixtures für:
+Synthetische Fixtures für:
 
 - Password
 - Hash
@@ -1170,85 +735,69 @@ Fixtures für:
 - API Key
 - PSK
 - Private Key
-- SNMP Community
+- SNMP
 - Business Subscription
 - Embedded Credentials
-- Third Party Plugin Credentials
+- Plugin Credentials
 
-Erwartung:
+## 17.2 Schema
 
-```text
-Secret entfernt
-Struktur erhalten
-Residual Check = Clean
-```
+Positive und negative Fixtures.
 
-## 22.2 DHCP Tests
+Negative Regressionen mindestens für:
 
-### Fixture: Legacy only
+- DERIVED ohne Derivation
+- unbekannte Root-Property
+- ungültige Finding-Severity
 
-Expected:
+## 17.3 Core Parser
 
-```text
-Authoritative DHCP = Legacy
-```
+Prüfen:
 
-### Fixture: Kea only
+- gleicher Input → gleiches Modell
+- Schema-Konformität
+- Stable IDs
+- WAN DHCP ohne erfundene IP
+- VLAN Referenzen
+- Gateway / Route
+- IPsec / VTI / Gateway
+- NAT / Firewall Association
+- Disabled State
+- Unresolved References
+- Sanitizer Status / SHA Mismatch
 
-Expected:
+## 17.4 DHCP / Assets
 
-```text
-Authoritative DHCP = Kea
-```
-
-### Fixture: Kea + Legacy
-
-Expected:
-
-```text
-Authoritative DHCP = Kea
-Legacy block = Review/Legacy only
-```
-
-### Reservation Tests
-
-- IP/MAC/Hostname übernommen
-- OUI enrichment korrekt
-- confidence korrekt
-- keine Modellfantasie
-
-## 22.3 Firewall/NAT Tests
-
-- disabled Rules nicht aktiv
-- associated NAT korrekt verknüpft
-- Portforward Flow entsteht
-- Outbound NAT Flow entsteht
-- No-NAT korrekt markiert
-
-## 22.4 Afros Regression Test
-
-Expected:
+Fixtures:
 
 ```text
-FLOW-AFROS exists
-Destination = 85.32.49.226
-Firewall source = 10.43.0.0/24
-NAT source = 10.43.0.0/16
-Finding source scope mismatch exists
+legacy-only.xml
+kea-only.xml
+kea-and-legacy.xml
+kea-reservations.xml
+duplicate-ip.xml
+invalid-pool.xml
+reservation-outside-pool.xml
+asset-enrichment.xml
 ```
 
-## 22.5 Diagram Tests
+Kritischer Golden Test:
 
-- keine Werte außerhalb Infrastructure Model
-- alle Pflichtdiagramme vorhanden
-- keine deaktivierten Regeln als aktive Verbindung
-- keine erfundenen Interfaces
+```text
+Kea + Legacy
+→ Kea authoritative
+→ Legacy retained but non-authoritative
+```
 
-## 22.6 Document Tests
+## 17.5 Diagram / Dokument
 
+Später prüfen:
+
+- keine Werte außerhalb des Canonical Models
+- Pflichtdiagramme vorhanden
+- Pflichtkapitel vorhanden
 - Quick Reference vorhanden
-- Gesamtübersicht vorhanden
-- jedes Hauptkapitel startet auf neuer Seite
+- jedes Hauptkapitel beginnt auf neuer Seite
 - NAT startet auf neuer Seite
 - Business Flows vorhanden
 - Asset Inventar vorhanden
@@ -1256,30 +805,45 @@ Finding source scope mismatch exists
 
 ---
 
-# 23. CI / Azure DevOps Prozess
+# 18. Azure DevOps – Verantwortungsgrenze
 
-Die CI/CD-Zielplattform ist Azure DevOps. Die dafür benötigte übergeordnete Plattformstruktur wird vom bestehenden DevOps-Bootstrap bereitgestellt und **nicht** innerhalb von OpenSenseDocumentation neu aufgebaut.
+Verbindlich gilt:
 
-Verantwortung des DevOps-Bootstraps:
+> **Azure DevOps Deployment erfolgt über die bestehende DevOps-Bootstrap-Struktur.**
 
-- Bereitstellung des Ziel-Repositories in Azure Repos
-- zentrale Pipeline-Grundstruktur bzw. wiederverwendbare Pipeline-Templates
+Der DevOps-Bootstrap ist die übergeordnete Source of Truth für:
+
+- Azure-DevOps-Projekt- und Repository-Struktur
 - standardisierte Kunden-/Repository-Trennung
+- zentrale Pipeline-Grundstruktur
+- wiederverwendbare Pipeline-Templates
 - übergeordnete Branch-/Policy-Konfiguration
+- Bereitstellung der vorgesehenen Ziel-Repositories
 
-Verantwortung von OpenSenseDocumentation:
+OpenSenseDocumentation ist verantwortlich für:
 
-- fachliche Build-Schritte und deren Reihenfolge
-- benötigte Runtime-/Tool-Versionen
-- Sanitizer-, Schema-, Parser-, Rule-, Renderer- und Regressionstests
-- Definition der erzeugten Build-Artefakte
-- deterministische Validierung und Build-Abbruchregeln
+- fachliche Build-Schritte
+- Runtime-/Tool-Anforderungen
+- Sanitizer
+- Canonical Model
+- Parser
+- Rule-/Correlation-Engine
+- Enrichment
+- Validierung
+- Renderer
+- fachliche Tests / Golden Files
+- Build-Abbruchregeln
+- Build-Artefaktvertrag
 
-Die derzeit vorhandenen GitHub-Actions-Workflows sind während der Übergangszeit Entwicklungs-/Migrationsartefakte. Sie sind **nicht** die langfristige Plattform-Source-of-Truth.
+Innerhalb dieses Repositories wird **keine zweite Kunden-/Repository-Bootstrap-Logik** aufgebaut.
 
-Der spätere Azure-Pipelines-Contract muss die zentrale Bootstrap-/Template-Struktur konsumieren, anstatt parallel eine eigene Pipeline-Plattform aufzubauen.
+Die derzeit vorhandenen GitHub-Actions-Workflows sind Übergangs-/Migrationsartefakte und nicht die langfristige CI/CD-Source-of-Truth.
 
-Zielpipeline:
+---
+
+# 19. Azure-Pipelines-Contract
+
+Die fachliche Pipeline bleibt unabhängig von der CI-Plattform:
 
 ```text
 config.xml changed
@@ -1311,107 +875,43 @@ Tests
       ├─ Render SVG
       ├─ Render DOCX
       ├─ Render PDF
-      └─ Generate Build Manifest
+      └─ Build Manifest
 ```
 
-Dabei bleibt die fachliche Pipeline identisch, unabhängig davon, ob sie während der Übergangszeit auf GitHub Actions oder nach dem Cutover auf Azure Pipelines ausgeführt wird.
+Der spätere Azure-Pipelines-Contract konsumiert die zentrale Bootstrap-/Template-Struktur statt eine eigene Plattformbasis zu duplizieren.
 
 ---
 
-# 24. Infrastructure Diff
+# 20. Kunden- und Testdaten
 
-Spätere Ausbaustufe:
+Reale Kundenkonfigurationen oder aus realen Kundendaten erzeugte Modelle gehören nicht in das öffentliche Tooling-Repository.
 
-Bei jeder neuen Config-Version wird zusätzlich ein Diff zum letzten erfolgreichen Build erzeugt.
+Committed Testfixtures müssen synthetisch sein.
 
-Beispiel:
-
-```text
-CHANGED
-
-Firewall:
-+ WAN 8443 -> 192.168.1.50
-
-DHCP:
-+ 192.168.1.72 Lager-Scanner-02
-
-VPN:
-~ Azure APP route
-  10.43.0.0/16 -> 10.43.0.0/17
-
-Services:
-- CrowdSec disabled
-```
-
-Nutzen:
-
-- Change Review
-- Kundenhistorie
-- unerwartete Änderungen erkennen
-- Troubleshooting
+Kundenspezifische Repositories und deren Trennung werden über den DevOps-Bootstrap bereitgestellt.
 
 ---
 
-# 25. Rolle der KI
+# 21. Nicht aus OPNsense belastbar ableitbar
 
-## Erlaubt
-
-- sprachliche Glättung
-- Management Summary
-- verständliche Erklärung bereits vorhandener Findings
-- optional Troubleshooting-Text aus strukturierten Fakten
-
-## Nicht erlaubt
-
-- technische Werte erfinden
-- aktive Dienste selbst bestimmen
-- DHCP-Priorität frei interpretieren
-- Firewall/NAT-Korrelation frei erfinden
-- Diagramminhalte selbst setzen
-- unbekannte physische Infrastruktur ergänzen
-
-### LLM Contract
-
-Wenn eine KI eingesetzt wird, erhält sie ausschließlich strukturierte Fakten wie:
-
-```json
-{
-  "facts": [],
-  "businessFlows": [],
-  "findings": []
-}
-```
-
-und die Anweisung:
-
-```text
-Do not introduce any fact that is not represented in the input model.
-```
-
----
-
-# 26. Nicht aus OPNsense belastbar ableitbar
-
-Folgende Bereiche benötigen andere Datenquellen:
+Ohne weitere Collector-/Metadatenquellen nicht raten:
 
 - physische Switch-Topologie
 - Switchport-Belegung
 - Trunk-/Access-Port-Konfiguration
 - Patchfelder / Verkabelung
-- tatsächliche Access-Point-Uplinks
-- aktive Endgeräte ohne DHCP-Reservation
-- aktueller WAN-Wert bei DHCP
+- tatsächliche AP-Uplinks
+- aktive Endgeräte ohne Reservation/weitere Quelle
+- aktuelle WAN-IP bei DHCP
 - Provider / Vertragsdaten
 - Standort / Rack / Seriennummer, sofern nicht separat erfasst
-- Azure-seitige UDR / NSG / Gateway-Konfiguration vollständig
-
-Diese Felder dürfen niemals geraten werden.
+- vollständige Azure UDR / NSG / Gateway-Konfiguration
 
 ---
 
-# 27. Zukünftige Multi-Source-Erweiterung
+# 22. Zukünftige Multi-Source-Erweiterung
 
-Das Canonical Infrastructure Model soll später weitere Collector-Quellen aufnehmen können.
+Ziel:
 
 ```text
 OPNsense
@@ -1427,88 +927,320 @@ Canonical Infrastructure Model
 Gemeinsame Kundendokumentation
 ```
 
-Damit kann später z. B. der Afros-Flow auch auf Azure-Seite vollständig mit UDR, NSG und VPN Gateway verifiziert werden.
-
-Die Bereitstellung der hierfür erforderlichen Azure-DevOps-Projekte und kundenspezifischen Repositories bleibt Aufgabe des DevOps-Bootstraps. Das Canonical Infrastructure Model definiert nur die technische Zusammenführung der Datenquellen.
+Die Plattform-/Repository-Provisionierung bleibt Aufgabe des DevOps-Bootstraps. Das Canonical Model definiert nur die technische Zusammenführung.
 
 ---
 
-# 28. Umsetzungsphasen
+# 23. Infrastructure Diff
+
+Spätere Ausbaustufe:
+
+```text
+CHANGED
+
+Firewall:
++ WAN 8443 -> 192.168.1.50
+
+DHCP:
++ Reservation Lager-Scanner-02
+
+VPN:
+~ Azure APP route geändert
+
+Services:
+- CrowdSec disabled
+```
+
+Nutzen:
+
+- Change Review
+- Kundenhistorie
+- unerwartete Änderungen
+- Troubleshooting
+
+---
+
+# 24. Rolle der KI
+
+## Erlaubt
+
+- sprachliche Glättung
+- Management Summary
+- verständliche Erklärung bereits vorhandener Findings
+- optional Troubleshooting-Text aus strukturierten Fakten
+
+## Nicht erlaubt
+
+- technische Werte erfinden
+- aktive Dienste selbst bestimmen
+- DHCP-Priorität frei interpretieren
+- Firewall/NAT/VPN-Korrelation frei erfinden
+- Diagramminhalte selbst setzen
+- unbekannte physische Infrastruktur ergänzen
+
+LLM Contract:
+
+```text
+Do not introduce any fact that is not represented in the input model.
+```
+
+---
+
+# 25. Repository-Struktur – Ziel
+
+```text
+OpenSenseDocumentation/
+│
+├── src/
+│   ├── Sanitizer/
+│   ├── Model/
+│   ├── Parser/
+│   ├── Rules/
+│   │   ├── ServiceResolution/
+│   │   ├── FlowCorrelation/
+│   │   ├── Findings/
+│   │   └── Validation/
+│   ├── Enrichment/
+│   │   ├── OUI/
+│   │   └── Assets/
+│   ├── Renderer/
+│   │   ├── Document/
+│   │   └── Diagram/
+│   └── Build/
+│
+├── schemas/
+├── data/
+│   └── oui/
+├── templates/
+│   ├── document/
+│   └── diagrams/
+├── assets/
+│   └── icons/
+├── tests/
+│   ├── Fixtures/
+│   ├── Expected/
+│   ├── Parser/
+│   └── Integration/
+├── tools/
+├── docs/
+├── output/
+├── README.md
+├── VERSION
+└── Umsetzungsplan.md
+```
+
+---
+
+# 26. Umsetzungsstatus und Roadmap
+
+## Statuslegende
+
+- `[x]` = im Repository implementiert bzw. als fachlicher Vertrag umgesetzt
+- `[ ]` = noch offen
+- **Lokal verifiziert** = Tests/Proof-of-Concept lokal erfolgreich durchgeführt
+- **CI verifiziert** = erst setzen, wenn ein erfolgreicher Workflow-/Pipeline-Lauf tatsächlich nachweisbar ist
+
+---
 
 ## Phase 0 – Repository-Basis
 
-- [ ] Repository-Struktur anlegen
-- [ ] README erstellen
-- [ ] `Umsetzungsplan.md` als Source of Truth pflegen
-- [ ] Versionierungsstrategie festlegen
-- [ ] Pester-Teststruktur anlegen
+**Status: implementiert.**
+
+- [x] Repository-Struktur anlegen
+- [x] README erstellen
+- [x] `Umsetzungsplan.md` als Source of Truth pflegen
+- [x] Semantic-Versioning-Strategie festlegen
+- [x] Pester-Teststruktur anlegen
+- [x] `.gitignore` gegen reale Kundenconfigs / generierte Kundendaten
+- [x] GitHub-Actions-Baseline für Übergangszeit anlegen
+
+**Verifikation:**
+
+- [x] Implementierungsstand im Repository dokumentiert
+- [ ] GitHub CI für den aktuellen Stand als erfolgreich verifiziert
+
+---
 
 ## Phase 1 – Sanitizer stabilisieren
 
-- [ ] Sanitizer v1.x übernehmen
-- [ ] alle bisherigen Fixes integrieren
-- [ ] Secret Rule Tests
-- [ ] PowerShell 5.1 Tests
-- [ ] PowerShell 7 Tests
-- [ ] Sanitization Report Schema
+**Status: implementiert, Sanitizer-Baseline `1.1.0`.**
+
+- [x] Sanitizer v1.x übernehmen
+- [x] alle bekannten bisherigen Fixes integrieren
+- [x] Secret Rule Tests anlegen
+- [x] Windows-PowerShell-5.1-Testpfad anlegen
+- [x] PowerShell-7-Testpfad anlegen
+- [x] `sanitization-report.schema.json` definieren
+- [x] Residual Secret Scan
+- [x] Business Subscription pfadbezogen redigieren
+- [x] Audit-Metadaten entfernen
+- [x] relative Output-/Report-Pfade absichern
+- [x] Generic-List-/PowerShell-5.1-Regression absichern
 
 ### Definition of Done
 
 ```text
-Alle bekannten Secrets werden entfernt.
-Keine Netzwerkstruktur wird unnötig zerstört.
-Residual Check funktioniert.
-Tests laufen reproduzierbar.
+Alle bekannten Secret-Klassen werden nach aktueller Regelbasis redigiert.
+Original XML bleibt unverändert.
+Netzwerkstruktur bleibt erhalten.
+Residual Check kontrolliert den Status Clean.
+Report enthält keine lokalen Vollpfade.
 ```
+
+**Verifikation:**
+
+- [x] synthetische Regression-Fixtures vorhanden
+- [ ] GitHub CI Windows PowerShell 5.1 erfolgreich verifiziert
+- [ ] GitHub CI PowerShell 7 erfolgreich verifiziert
 
 ---
 
 ## Phase 2 – Canonical Schema
 
-- [ ] `infrastructure-model.schema.json`
-- [ ] Facts / Derived / Inferred / Findings definieren
-- [ ] Evidence-Struktur definieren
-- [ ] Versionierung des Schemas
+**Status: implementiert, Schema `1.0.0`.**
+
+- [x] `infrastructure-model.schema.json`
+- [x] modulare Schema-Contracts
+- [x] CONFIRMED / DERIVED / INFERRED / FINDING definieren
+- [x] Evidence-/Provenance-Struktur definieren
+- [x] Stable-ID-Strategie definieren und implementieren
+- [x] Schema-Versionierung definieren
+- [x] Canonical JSON Serialization definieren
+- [x] positive Schema-Fixtures
+- [x] negative Regression-Fixtures
+- [x] `unresolvedReferences` als Vertrag definieren
 
 ### Definition of Done
 
-Ein Infrastructure Model kann unabhängig von DOCX/Diagrammen validiert werden.
+```text
+Ein Infrastructure Model kann unabhängig von DOCX und Diagrammen validiert werden.
+Parser und Renderer haben einen versionierten technischen Vertrag.
+```
+
+**Verifikation:**
+
+- [x] Schema-/Fixture-Validierung lokal durchgeführt
+- [ ] GitHub Schema-CI erfolgreich verifiziert
 
 ---
 
 ## Phase 3 – Core Parser
 
-Implementieren:
+**Status: implementiert, lokal verifiziert.**
 
-- [ ] System
-- [ ] Interfaces
-- [ ] VLANs
-- [ ] Gateways
-- [ ] Static Routes
-- [ ] Aliases
-- [ ] Firewall
-- [ ] NAT
-- [ ] IPsec
+- [x] System
+- [x] Interfaces
+- [x] abgeleitete statische IPv4-Netze
+- [x] VLANs
+- [x] Gateways
+- [x] Static Routes
+- [x] Aliases
+- [x] Firewall
+- [x] NAT
+- [x] IPsec
+- [x] Stable IDs und Evidence für Records
+- [x] `unresolvedReferences`
+- [x] harte Prüfung von Sanitizer-Status und SHA-256
+- [x] synthetische Parser-Regressionstests
+- [x] semantischer Golden-Fingerprint
+- [x] Windows-/Linux-CI-Definition für Übergangszeit
 
 ### Definition of Done
 
-Alle aktiven und deaktivierten Objekte werden korrekt und mit Evidence ins Modell übernommen.
+```text
+Alle Phase-3-Kernobjekte werden deterministisch und mit Evidence in das Canonical Model überführt.
+Unknown wird nicht geraten.
+Die Ausgabe ist schema-valide.
+```
+
+**Verifikation:**
+
+- [x] synthetische Regressionstests lokal erfolgreich
+- [x] reale sanitisierte Proof-of-Concept-Config lokal schema-valide verarbeitet
+- [ ] GitHub Parser-CI erfolgreich verifiziert
 
 ---
 
 ## Phase 4 – DHCP / Asset Inventory
 
-- [ ] Kea Parser
+**Status: nächster fachlicher Implementierungsschritt.**
+
+### 4.1 Testbasis
+
+- [ ] `legacy-only.xml`
+- [ ] `kea-only.xml`
+- [ ] `kea-and-legacy.xml`
+- [ ] `kea-reservations.xml`
+- [ ] `duplicate-ip.xml`
+- [ ] `invalid-pool.xml`
+- [ ] `reservation-outside-pool.xml`
+- [ ] `asset-enrichment.xml`
+- [ ] Golden Expected Output für Kea+Legacy
+
+### 4.2 DHCP Parser
+
+- [ ] Kea DHCPv4 Parser
 - [ ] Legacy DHCP Parser
-- [ ] Authoritative Service Resolution
+- [ ] Services
+- [ ] Scopes
 - [ ] Reservations
-- [ ] OUI Enrichment
-- [ ] Confidence Model
-- [ ] Conflict Validation
+
+### 4.3 Authoritative Service Resolution
+
+- [ ] Resolution pro Interface / IP-Familie
+- [ ] Kea authoritative, wenn enabled und Interface zugewiesen
+- [ ] Legacy parallel erhalten, aber non-authoritative
+- [ ] uneindeutige Situation als harter Validierungsfehler behandeln
+
+### 4.4 Asset Builder
+
+- [ ] Reservations in deterministische Asset Records überführen
+- [ ] MAC-normalisierte primäre Identität
+- [ ] Fallback Stable-ID ohne MAC
+- [ ] Source Reservation Refs
+
+### 4.5 OUI / Confidence / Inference
+
+- [ ] versionierte lokale OUI-Datenbasis
+- [ ] OUI Manifest / SHA-256
+- [ ] Vendor `DERIVED`
+- [ ] Device Type `INFERRED` nur über versionierte Regeln
+- [ ] Model `INFERRED` nur über versionierte Regeln
+- [ ] `UNKNOWN` bleibt möglich und zulässig
+- [ ] keine Live-OUI-API im normalen Build
+
+### 4.6 Conflict Validation
+
+- [ ] Pool innerhalb Subnetz
+- [ ] Pool Start <= Pool End
+- [ ] Duplicate IP / unterschiedliche MAC erkennen
+- [ ] Reservations außerhalb Subnetz ablehnen
+- [ ] Reservations außerhalb dynamischem Pool zulassen
+- [ ] Hostname-Duplikate als Review statt automatischem Build-Fehler klassifizieren
 
 ### Kritischer Regression Test
 
-Kea + Legacy darf niemals wieder zum falschen aktiven Pool führen.
+```text
+Kea + Legacy auf LAN
+→ Kea authoritative
+→ Kea Pool wird als produktiv dokumentiert
+→ Legacy Pool bleibt als Legacy erhalten
+→ Legacy darf niemals den produktiven Pool überschreiben
+```
+
+### Definition of Done Phase 4
+
+- [ ] Kea vollständig geparst
+- [ ] Legacy vollständig geparst
+- [ ] authoritative Service pro Interface bestimmt
+- [ ] Reservations vollständig übernommen
+- [ ] Assets deterministisch erzeugt
+- [ ] OUI Enrichment versioniert
+- [ ] Confidence-Klassen korrekt
+- [ ] Conflict Validation aktiv
+- [ ] Canonical Model schema-valid
+- [ ] Windows/Linux semantisch identisches Ergebnis
+- [ ] Proof-of-Concept-Config lokal gegengeprüft
 
 ---
 
@@ -1540,11 +1272,11 @@ Kea + Legacy darf niemals wieder zum falschen aktiven Pool führen.
 
 ## Phase 7 – Correlation / Business Flows
 
-- [ ] NAT <-> Firewall
-- [ ] Firewall <-> Interface
-- [ ] Route <-> Gateway
-- [ ] Gateway <-> VPN
-- [ ] DNS Forward <-> Route/VPN
+- [ ] NAT ↔ Firewall
+- [ ] Firewall ↔ Interface
+- [ ] Route ↔ Gateway
+- [ ] Gateway ↔ VPN
+- [ ] DNS Forward ↔ Route/VPN
 - [ ] Alias references
 - [ ] Afros regression flow
 - [ ] Tagetik regression flow
@@ -1561,43 +1293,43 @@ Kea + Legacy darf niemals wieder zum falschen aktiven Pool führen.
 - [ ] gateway monitoring disabled
 - [ ] expired certificate
 - [ ] legacy active-like config
-- [ ] overly broad exposure indicators
+- [ ] broad exposure indicators
 - [ ] unresolved references
 
 ---
 
 ## Phase 9 – Diagram Renderer
 
-- [ ] SVG theme
-- [ ] standard icon library
-- [ ] network overview
-- [ ] routing/VPN detail
-- [ ] business-flow diagram
-- [ ] Confirmed / Derived / Inferred styling
-- [ ] no generative technical values
+- [ ] SVG Theme
+- [ ] standardisierte Symbolbibliothek
+- [ ] Netzwerkübersicht
+- [ ] Routing/VPN Detail
+- [ ] Business-Flow-Diagramm
+- [ ] Confirmed / Derived / Inferred Styling
+- [ ] keine generativen technischen Werte
 
 ---
 
 ## Phase 10 – Document Renderer
 
-- [ ] DOCX template
+- [ ] DOCX Template
 - [ ] Quick Reference
 - [ ] Inhaltsverzeichnis
-- [ ] all mandatory chapters
+- [ ] alle Pflichtkapitel
 - [ ] `Heading 1 -> pageBreakBefore`
-- [ ] tables from model only
-- [ ] diagrams embedded
-- [ ] PDF conversion
+- [ ] Tabellen nur aus Canonical Model
+- [ ] Diagramme einbetten
+- [ ] PDF Conversion
 
 ---
 
 ## Phase 11 – End-to-End Validation
 
-- [ ] sanitized XML -> model
-- [ ] model -> validation
-- [ ] model -> diagrams
-- [ ] model -> DOCX
-- [ ] DOCX -> PDF
+- [ ] sanitized XML → model
+- [ ] model → validation
+- [ ] model → diagrams
+- [ ] model → DOCX
+- [ ] DOCX → PDF
 - [ ] build manifest
 - [ ] golden-file comparison
 
@@ -1605,17 +1337,17 @@ Kea + Legacy darf niemals wieder zum falschen aktiven Pool führen.
 
 ## Phase 12 – Azure DevOps Automation
 
-Phase 12 implementiert **keine eigene DevOps-Projekt-/Repository-Bootstrap-Logik**. Sie bindet OpenSenseDocumentation an die bereits vorhandene DevOps-Bootstrap-Struktur an.
+Phase 12 implementiert keine eigene DevOps-Projekt-/Repository-Bootstrap-Logik. Sie bindet OpenSenseDocumentation an die bestehende DevOps-Bootstrap-Struktur an.
 
 - [ ] GitHub-Repository mit vollständiger Git-Historie in das vom DevOps-Bootstrap vorgesehene Azure-Repos-Ziel migrieren
 - [ ] bestehende GitHub-Actions-Prüfungen fachlich auf Azure Pipelines abbilden
-- [ ] zentrale Pipeline-Templates der Bootstrap-Struktur konsumieren statt zu duplizieren
-- [ ] benötigte Build-Validation/Policies an die Bootstrap-Vorgaben anbinden
+- [ ] zentrale Pipeline-Templates der Bootstrap-Struktur konsumieren
+- [ ] Build Validation / Policies an Bootstrap-Vorgaben anbinden
 - [ ] Config Change Detection
-- [ ] automatic documentation build
+- [ ] automatischer Dokumentationsbuild
 - [ ] Pipeline Artifacts für Modell, Reports, Diagramme, DOCX/PDF
-- [ ] build report
-- [ ] infrastructure diff
+- [ ] Build Report
+- [ ] Infrastructure Diff
 - [ ] GitHub erst nach verifiziertem Azure-DevOps-Cutover read-only/archiviert setzen
 
 ### Definition of Done
@@ -1630,7 +1362,25 @@ GitHub ist nach erfolgreichem Cutover nicht mehr die operative Source of Truth.
 
 ---
 
-# 29. Qualitätsziele
+# 27. Empfohlener nächster Ablauf
+
+Vor weiterer fachlicher Implementierung:
+
+```text
+1. Phase-0–3-Status im Source-of-Truth synchronisieren  ← erledigt mit diesem Stand
+2. DevOps-Bootstrap / Azure-Repos-Ziel gegenprüfen
+3. Repository mit Git-Historie nach Azure DevOps migrieren
+4. bestehende Sanitizer-/Schema-/Parser-Tests in Azure Pipelines abbilden
+5. deterministische Ergebnisse zwischen bisherigem Stand und Azure DevOps vergleichen
+6. Azure DevOps als operative Source of Truth festlegen
+7. Phase 4 auf der Zielplattform implementieren
+```
+
+Die vollständige produktive Automatisierung bleibt Phase 12; lediglich der Plattform-Cutover wird vor Phase 4 durchgeführt, damit die weitere Entwicklung nicht auf einer Plattform fortgesetzt wird, die anschließend erneut migriert werden müsste.
+
+---
+
+# 28. Qualitätsziele
 
 ## Determinismus
 
@@ -1645,71 +1395,68 @@ inhaltlich identisches Dokument
 
 ## Nachvollziehbarkeit
 
-Jede relevante technische Aussage muss Evidence besitzen.
+Jede relevante technische Aussage besitzt Evidence oder ist explizit als Derived/Inference/Finding klassifiziert.
 
 ## Sicherheit
 
-Keine bekannte Secret-Klasse darf in KI-/Dokumentationsartefakte gelangen.
+Keine bekannte Secret-Klasse darf in nachgelagerte Dokumentations-/KI-Artefakte gelangen.
 
 ## MSP-Tauglichkeit
 
-Ein neuer Mitarbeiter soll nach 5–10 Minuten mindestens beantworten können:
+Ein neuer Mitarbeiter soll innerhalb weniger Minuten mindestens beantworten können:
 
 - Wie ist der Kunde logisch aufgebaut?
 - Welche Netze existieren?
-- Wie funktioniert Azure/VPN?
+- Wie funktioniert VPN/Azure-Anbindung?
 - Welche Sonderflows existieren?
 - Welche externen Freigaben existieren?
-- Welcher DHCP-Dienst ist tatsächlich aktiv?
-- Welche Infrastruktur lässt sich aus Reservations ableiten?
+- Welcher DHCP-Dienst ist tatsächlich authoritative?
+- Welche Assets lassen sich aus Reservations ableiten?
 - Welche Security-Dienste sind aktiv?
 - Wie wird überwacht?
-- Welche bekannten Findings existieren?
+- Welche Findings existieren?
 
 ---
 
-# 30. Definition of Done für Version 1.0
+# 29. Definition of Done für Version 1.0
 
-Version 1.0 gilt erst als abgeschlossen, wenn alle folgenden Punkte erfüllt sind:
+Version 1.0 gilt erst als abgeschlossen, wenn:
 
 ```text
 [ ] Original config.xml bleibt unverändert
 [ ] Sanitizer ist getestet und reproduzierbar
 [ ] Canonical Infrastructure Model ist versioniert
-[ ] Kea/Legacy Prioritätslogik ist getestet
+[ ] Kea/Legacy-Prioritätslogik ist getestet
 [ ] DHCP Reservations werden als Assets erfasst
 [ ] OUI Enrichment ist versioniert
 [ ] Active/Disabled Regeln werden korrekt getrennt
 [ ] NAT/Firewall/Route/VPN werden korreliert
-[ ] Afros/Tagetik als End-to-End Flows erkannt
-[ ] Findings Engine aktiv
+[ ] Afros/Tagetik werden als End-to-End Flows erkannt
+[ ] Findings Engine ist aktiv
 [ ] Zertifikate werden geprüft
-[ ] Monitoring / Services dokumentiert
-[ ] Gesamt-Netzwerkübersicht vorhanden
-[ ] Business-Flow-Diagramm vorhanden
+[ ] Monitoring / Services werden dokumentiert
+[ ] Gesamt-Netzwerkübersicht ist vorhanden
+[ ] Business-Flow-Diagramm ist vorhanden
 [ ] Diagramme enthalten keine erfundenen Werte
-[ ] Quick Reference vorhanden
+[ ] Quick Reference ist vorhanden
 [ ] jedes Hauptkapitel startet auf neuer Seite
 [ ] DOCX und PDF werden automatisiert erzeugt
-[ ] Build Manifest vorhanden
-[ ] Validierung kann Build bei P1-Problemen stoppen
-[ ] Regression Tests decken alle bisher gefundenen Fehler ab
-[ ] Azure DevOps Deployment erfolgt über die bestehende DevOps-Bootstrap-Struktur
-[ ] OpenSenseDocumentation dupliziert keine Kunden-/Repository-Bootstrap-Logik
+[ ] Build Manifest ist vorhanden
+[ ] P1-Validierung kann den Build stoppen
+[ ] Regressionstests decken alle bisher gefundenen kritischen Fehler ab
+[ ] Azure DevOps ist operative Source of Truth
 ```
+
+Hinweis: Die Punkte werden in dieser globalen Version-1.0-Liste erst abgehakt, wenn die vollständige End-to-End-Funktion inklusive Zielpipeline verifiziert ist. Einzelne Teilkomponenten können in den Phasen bereits implementiert sein.
 
 ---
 
-# 31. Leitentscheidung
+# 30. Leitentscheidung
 
 Die wichtigste Architekturentscheidung dieses Projekts lautet:
 
 > **OPNsense XML wird deterministisch sanitisiert, geparst, korreliert und validiert. Das daraus erzeugte Canonical Infrastructure Model ist die einzige technische Quelle für Dokumentation und Diagramme.**
 
-Die KI ist nur noch eine optionale sprachliche Schicht und niemals die technische Wahrheitsquelle.
+Die KI ist nur eine optionale sprachliche Schicht und niemals die technische Wahrheitsquelle.
 
-Für die Plattform gilt ergänzend:
-
-> **Azure DevOps Deployment erfolgt über die bestehende DevOps-Bootstrap-Struktur. OpenSenseDocumentation definiert keine konkurrierende Azure-DevOps-Projekt-, Kunden- oder Repository-Provisionierungslogik.**
-
-Damit wird aus dem bisherigen Proof of Concept ein reproduzierbarer MSP-Dokumentationsgenerator, der sich sauber in die bestehende Azure-DevOps-Gesamtarchitektur einfügt.
+Die Azure-DevOps-Plattformstruktur wird nicht in diesem Projekt neu erfunden, sondern über den bestehenden DevOps-Bootstrap bereitgestellt.
