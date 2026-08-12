@@ -3,20 +3,31 @@
 from __future__ import annotations
 
 import json
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
 try:
     from .core import CANONICALIZATION_VERSION, ID_STRATEGY_VERSION, PARSER_VERSION, RULESET_VERSION, SCHEMA_VERSION, ParseContext, ParserError, load_and_verify_report, stable_id, text
+    from .dhcp import parse_dhcp_facts
     from .network_objects import parse_aliases, parse_gateways, parse_routes
     from .security import parse_firewall, parse_ipsec, parse_nat
     from .system_interfaces import parse_interfaces, parse_system, parse_vlans
 except ImportError:  # direct script/test execution
     from core import CANONICALIZATION_VERSION, ID_STRATEGY_VERSION, PARSER_VERSION, RULESET_VERSION, SCHEMA_VERSION, ParseContext, ParserError, load_and_verify_report, stable_id, text
+    from dhcp import parse_dhcp_facts
     from network_objects import parse_aliases, parse_gateways, parse_routes
     from security import parse_firewall, parse_ipsec, parse_nat
     from system_interfaces import parse_interfaces, parse_system, parse_vlans
+
+try:
+    from Rules.ServiceResolution.dhcp_resolution import resolve_dhcp_model
+except ImportError:  # direct script/test execution with src/Parser on sys.path
+    rules_path = Path(__file__).resolve().parents[1] / "Rules" / "ServiceResolution"
+    if str(rules_path) not in sys.path:
+        sys.path.insert(0, str(rules_path))
+    from dhcp_resolution import resolve_dhcp_model
 
 
 def _dns_defaults(root: ET.Element) -> dict[str, Any]:
@@ -40,13 +51,14 @@ def parse_opnsense_config(input_path: str | Path, report_path: str | Path) -> di
     parent_map={child:parent for parent in tree.iter() for child in parent}; source_id=str((report.get("output") or {}).get("fileName") or input_path.name)
     ctx=ParseContext(input_path,report_path,source_sha,source_id,parent_map,{}, {}, {}, {}, [])
     system=parse_system(root,ctx); interfaces,networks=parse_interfaces(root,ctx); vlans=parse_vlans(root,ctx,interfaces); aliases=parse_aliases(root,ctx); gateways=parse_gateways(root,ctx); routes=parse_routes(root,ctx); vpn=parse_ipsec(root,ctx,gateways,interfaces); nat,associations=parse_nat(root,ctx); firewall=parse_firewall(root,ctx,nat,associations)
+    dhcp_facts=parse_dhcp_facts(root,ctx); dhcp=resolve_dhcp_model(dhcp_facts,interfaces,networks)
     output_meta,source_meta=report.get("output") or {},report.get("source") or {}
     return {
         "schemaVersion":SCHEMA_VERSION,"modelId":stable_id("model",identity_parts=[source_sha]),
         "producer":{"parserVersion":PARSER_VERSION,"rulesetVersion":RULESET_VERSION,"schemaVersion":SCHEMA_VERSION,"idStrategyVersion":ID_STRATEGY_VERSION,"canonicalizationVersion":CANONICALIZATION_VERSION},
         "source":{"sourceType":"OPNsense config.xml","originalFileName":source_meta.get("fileName"),"originalSha256":source_meta.get("sha256"),"sanitizedFileName":output_meta.get("fileName") or input_path.name,"sanitizedSha256":source_sha,"sanitizerVersion":str(report.get("sanitizerVersion") or "0.0.0"),"sanitizationStatus":"Clean"},
         "system":system,"interfaces":interfaces,"networks":networks,"vlans":vlans,
-        "dhcp":{"services":[],"scopes":[],"reservations":[]},"assets":[],"dns":_dns_defaults(root),"aliases":aliases,"gateways":gateways,"routes":routes,"vpn":vpn,"nat":nat,"firewallRules":firewall,
+        "dhcp":dhcp,"assets":[],"dns":_dns_defaults(root),"aliases":aliases,"gateways":gateways,"routes":routes,"vpn":vpn,"nat":nat,"firewallRules":firewall,
         "services":[],"monitoring":[],"cronJobs":[],"certificates":[],"businessFlows":[],"findings":[],"unresolvedReferences":sorted(ctx.unresolved,key=lambda item:item["id"]),
     }
 
