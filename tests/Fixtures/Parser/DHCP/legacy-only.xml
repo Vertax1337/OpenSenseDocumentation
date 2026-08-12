@@ -23,6 +23,13 @@
       </range>
       <dnsserver>192.0.2.1</dnsserver>
       <ntpserver>192.0.2.1</ntpserver>
+      <staticmap>
+        <mac>02:00:5e:20:00:01</mac>
+        <cid />
+        <ipaddr>192.0.2.31</ipaddr>
+        <hostname>legacy-client-01</hostname>
+        <descr>Synthetic legacy reservation</descr>
+      </staticmap>
     </lan>
   </dhcpd>
 </opnsense>
