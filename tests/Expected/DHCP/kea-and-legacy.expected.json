@@ -8,7 +8,7 @@
           "sourceType": "opnsense-config",
           "sourceId": "kea-and-legacy.xml",
           "path": "/opnsense/dhcpd/lan",
-          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "sourceSha256": "EF67351398622241DB3B879EBBDFB92F6121C74E277B4E7A8BDAF4BFDAFE0CEC",
           "note": null
         }
       ],
@@ -38,7 +38,7 @@
           "sourceType": "opnsense-config",
           "sourceId": "kea-and-legacy.xml",
           "path": "/opnsense/dhcpd/opt4",
-          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "sourceSha256": "EF67351398622241DB3B879EBBDFB92F6121C74E277B4E7A8BDAF4BFDAFE0CEC",
           "note": null
         }
       ],
@@ -68,7 +68,7 @@
           "sourceType": "opnsense-config",
           "sourceId": "kea-and-legacy.xml",
           "path": "/opnsense/OPNsense/Kea/dhcp4/general",
-          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "sourceSha256": "EF67351398622241DB3B879EBBDFB92F6121C74E277B4E7A8BDAF4BFDAFE0CEC",
           "note": null
         }
       ],
@@ -100,7 +100,7 @@
           "sourceType": "opnsense-config",
           "sourceId": "kea-and-legacy.xml",
           "path": "/opnsense/OPNsense/Kea/dhcp4/subnets/subnet4",
-          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "sourceSha256": "EF67351398622241DB3B879EBBDFB92F6121C74E277B4E7A8BDAF4BFDAFE0CEC",
           "note": null
         }
       ],
@@ -148,7 +148,7 @@
           "sourceType": "opnsense-config",
           "sourceId": "kea-and-legacy.xml",
           "path": "/opnsense/dhcpd/lan",
-          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "sourceSha256": "EF67351398622241DB3B879EBBDFB92F6121C74E277B4E7A8BDAF4BFDAFE0CEC",
           "note": null
         }
       ],
@@ -190,7 +190,7 @@
           "sourceType": "opnsense-config",
           "sourceId": "kea-and-legacy.xml",
           "path": "/opnsense/dhcpd/opt4",
-          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "sourceSha256": "EF67351398622241DB3B879EBBDFB92F6121C74E277B4E7A8BDAF4BFDAFE0CEC",
           "note": null
         }
       ],
