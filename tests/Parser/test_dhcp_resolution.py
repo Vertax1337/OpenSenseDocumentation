@@ -13,12 +13,11 @@ from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "src" / "Parser"))
 
-from core import ParseContext, ParserError  # noqa: E402
-from dhcp import parse_dhcp_facts  # noqa: E402
-from opnsense_parser import parse_opnsense_config  # noqa: E402
-from system_interfaces import parse_interfaces  # noqa: E402
+from Parser.core import ParseContext, ParserError  # noqa: E402
+from Parser.dhcp import parse_dhcp_facts  # noqa: E402
+from Parser.opnsense_parser import parse_opnsense_config  # noqa: E402
+from Parser.system_interfaces import parse_interfaces  # noqa: E402
 from Rules.ServiceResolution.dhcp_resolution import resolve_dhcp_model  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "Fixtures" / "Parser" / "DHCP"
