@@ -125,18 +125,27 @@ function Get-ResidualFindings([System.Xml.XmlDocument]$Document,[string]$Replace
       $findings.Add([pscustomobject]@{severity='high';path=((Get-XmlNodePath $e)+'/@'+$a.Name);reason='Sensitive attribute still contains a value'})|Out-Null
     }}
   }
+
   $checks=@(
     @{Name='Private key marker';Pattern='(?i)-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----'},
     @{Name='bcrypt password hash';Pattern='(?i)\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}'},
-    @{Name='SHA-crypt password hash';Pattern='(?i)\$[56]\$[^\s$]+\$[./A-Za-z0-9]{20,}'},
-    @{Name='Basic-auth style URL';Pattern='(?i)\b[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@'}
+    @{Name='SHA-crypt password hash';Pattern='(?i)\$[56]\$[^\s$]+\$[./A-Za-z0-9]{20,}'}
   )
+  $basicAuthPattern='(?i)\b[a-z][a-z0-9+.-]*://[^\s/:@]+:([^\s/@]+)@'
+
   foreach($n in @($Document.SelectNodes('//text() | //comment() | //processing-instruction()'))) {
     if ([string]::IsNullOrWhiteSpace($n.Value)) { continue }
+    $owner=$n.ParentNode; $path=if($null -ne $owner){Get-XmlNodePath $owner}else{'/'}
+
     foreach($c in $checks) { if ([regex]::IsMatch($n.Value,$c.Pattern)) {
-      $owner=$n.ParentNode; $path=if($null -ne $owner){Get-XmlNodePath $owner}else{'/'}
       $findings.Add([pscustomobject]@{severity='high';path=$path;reason=$c.Name})|Out-Null
     }}
+
+    foreach($m in [regex]::Matches($n.Value,$basicAuthPattern)) {
+      if ($m.Groups.Count -gt 1 -and $m.Groups[1].Value -ne $Replacement) {
+        $findings.Add([pscustomobject]@{severity='high';path=$path;reason='Basic-auth style URL'})|Out-Null
+      }
+    }
   }
   return $findings.ToArray()
 }
