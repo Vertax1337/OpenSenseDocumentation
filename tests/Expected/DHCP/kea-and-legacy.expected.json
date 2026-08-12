@@ -74,7 +74,7 @@
       ],
       "derivation": {
         "ruleId": "dhcp.authority.v1",
-        "basis": "Kea DHCPv4 is enabled and explicitly assigned to LAN; Kea takes precedence over legacy DHCP on the same interface.",
+        "basis": "Kea IPv4 is enabled and explicitly assigned to LAN; it is the only configured-enabled DHCP implementation for this interface and IP family.",
         "inputRefs": [
           "interface:lan"
         ]
