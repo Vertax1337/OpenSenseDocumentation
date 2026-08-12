@@ -22,6 +22,7 @@ from system_interfaces import parse_interfaces  # noqa: E402
 from Rules.ServiceResolution.dhcp_resolution import resolve_dhcp_model  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "Fixtures" / "Parser" / "DHCP"
+EXPECTED = ROOT / "tests" / "Expected" / "DHCP" / "kea-and-legacy.expected.json"
 
 
 def sha256_file(path: Path) -> str:
@@ -115,6 +116,11 @@ class DhcpAuthorityResolutionTests(unittest.TestCase):
             [{"start": "192.0.2.10", "end": "192.0.2.245"}],
             legacy_scope["pools"],
         )
+
+    def test_kea_and_legacy_matches_golden_contract_exactly(self):
+        model = self.resolve_fixture("kea-and-legacy.xml")
+        expected = json.loads(EXPECTED.read_text(encoding="utf-8"))
+        self.assertEqual(expected, model)
 
     def test_legacy_only_becomes_authoritative(self):
         model = self.resolve_fixture("legacy-only.xml")
