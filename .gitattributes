@@ -1,0 +1,10 @@
+# Canonical line endings for deterministic cross-platform hashes and generated contracts.
+*.xml text eol=lf
+*.json text eol=lf
+*.py text eol=lf
+*.ps1 text eol=lf
+*.psm1 text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
