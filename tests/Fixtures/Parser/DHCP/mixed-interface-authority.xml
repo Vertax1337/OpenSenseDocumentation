@@ -22,7 +22,6 @@
   </interfaces>
   <dhcpd>
     <lan>
-      <enable>1</enable>
       <range>
         <from>192.0.2.10</from>
         <to>192.0.2.245</to>
