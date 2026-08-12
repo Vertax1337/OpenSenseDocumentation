@@ -28,7 +28,7 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
-def resolved_fixture(name: str):
+def resolved_fixture(name: str, source_id: str | None = None):
     path = FIXTURES / name
     tree = ET.parse(path)
     root = tree.getroot()
@@ -37,7 +37,7 @@ def resolved_fixture(name: str):
         input_path=path,
         report_path=path.with_suffix(".report.json"),
         source_sha=sha256_file(path),
-        source_id=name,
+        source_id=source_id or name,
         parent_map=parent_map,
         interface_by_name={},
         interface_by_device={},
@@ -228,8 +228,14 @@ class AssetBuilderTests(unittest.TestCase):
             )
             model = parse_opnsense_config(fixture, report)
 
+        expected_full_parser_assets = build_assets(
+            resolved_fixture(
+                "asset-enrichment.xml",
+                source_id="config.sanitized.xml",
+            )["reservations"]
+        )
         self.assertEqual(3, len(model["assets"]))
-        self.assertEqual(assets, model["assets"])
+        self.assertEqual(expected_full_parser_assets, model["assets"])
 
 
 if __name__ == "__main__":
