@@ -14,7 +14,7 @@
       ],
       "derivation": {
         "ruleId": "dhcp.authority.v1",
-        "basis": "Legacy DHCP configuration is retained for LAN but is disabled because no enable marker is present; enabled Kea DHCPv4 is assigned to LAN.",
+        "basis": "Legacy DHCP configuration is retained for lan but is disabled; Kea IPv4 is the only configured-enabled DHCP implementation on this interface.",
         "inputRefs": [
           "interface:lan"
         ]
@@ -44,7 +44,7 @@
       ],
       "derivation": {
         "ruleId": "dhcp.authority.v1",
-        "basis": "Legacy DHCP configuration is retained for opt4 but is disabled because no enable marker is present.",
+        "basis": "isc-dhcpd DHCP configuration is retained for opt4 but is disabled and therefore non-authoritative.",
         "inputRefs": [
           "interface:opt4"
         ]
@@ -74,7 +74,7 @@
       ],
       "derivation": {
         "ruleId": "dhcp.authority.v1",
-        "basis": "Kea IPv4 is enabled and explicitly assigned to LAN; it is the only configured-enabled DHCP implementation for this interface and IP family.",
+        "basis": "Kea IPv4 is enabled and explicitly assigned to lan; it is the only configured-enabled DHCP implementation for this interface and IP family.",
         "inputRefs": [
           "interface:lan"
         ]
@@ -106,7 +106,7 @@
       ],
       "derivation": {
         "ruleId": "dhcp.scope-interface.v1",
-        "basis": "The Kea subnet uniquely matches the configured IPv4 network of LAN among Kea-assigned interfaces.",
+        "basis": "Kea subnet uniquely matches the parsed IPv4 network of one Kea-assigned interface.",
         "inputRefs": [
           "dhcp-service:kea-ipv4-lan",
           "interface:lan"
@@ -154,7 +154,7 @@
       ],
       "derivation": {
         "ruleId": "dhcp.scope-interface.v1",
-        "basis": "Legacy DHCP scope is structurally bound to the LAN interface block.",
+        "basis": "Legacy DHCP scope is structurally bound to its interface block.",
         "inputRefs": [
           "dhcp-service:isc-dhcpd-ipv4-lan",
           "interface:lan"
@@ -196,7 +196,7 @@
       ],
       "derivation": {
         "ruleId": "dhcp.scope-interface.v1",
-        "basis": "Legacy DHCP scope is structurally bound to the opt4 interface block.",
+        "basis": "Legacy DHCP scope is structurally bound to its interface block.",
         "inputRefs": [
           "dhcp-service:isc-dhcpd-ipv4-opt4",
           "interface:opt4"
