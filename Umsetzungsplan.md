@@ -6,7 +6,7 @@
 > **Projektstand:** `0.3.0`  
 > **Aktuelle fachliche Phase:** Phase 4 – DHCP / Asset Inventory  
 > **CI/CD-Zielplattform:** Azure DevOps über die bestehende DevOps-Bootstrap-Struktur  
-> **CI-Status:** Phase 1–3 sowie Phase 4.1/4.2 auf Azure Pipelines erfolgreich verifiziert; Phase 4.3 implementiert und nach Active/Active-Korrektur erneut CI-zu-verifizieren  
+> **CI-Status:** Phase 1–3 sowie Phase 4.1/4.2/4.3 auf Azure Pipelines erfolgreich verifiziert; Phase 4.4 implementiert, erneute Parser-CI nach Provenance-Testkorrektur ausstehend  
 > **Grundsatz:** Technische Fakten werden nicht durch ein LLM erfunden oder frei interpretiert. Parser, Regeln, Korrelation, Validierung, Diagramme und Dokumentstruktur müssen deterministisch sein.
 
 ---
@@ -900,7 +900,7 @@ Die Azure-Pipelines-Migrationsbaseline unter `/pipelines/azure-pipelines.yml` is
 - Core Parser / Ubuntu / Python 3.12
 - Core Parser / Windows / Python 3.12
 
-Phase 4.1 und Phase 4.2 wurden ebenfalls auf den vorhandenen Windows-/Linux-Parserjobs erfolgreich verifiziert. Phase 4.3 nutzt dieselbe Cross-Platform-CI und wird nach der Active/Active-Korrektur erneut verifiziert.
+Phase 4.1, Phase 4.2 und Phase 4.3 wurden ebenfalls auf den vorhandenen Windows-/Linux-Parserjobs erfolgreich verifiziert. Phase 4.4 nutzt dieselbe Cross-Platform-CI; nach der Korrektur des Provenance-Kontexts im Asset-Integrationstest ist der erneute Lauf noch ausstehend.
 
 Die vorhandenen GitHub-Actions-Workflows bleiben vorerst als Migrations-/Vergleichsartefakte erhalten. Sie sind nicht mehr die operative CI/CD-Source-of-Truth und werden erst nach Abschluss der noch offenen Repository-/Policy-Aufräumarbeiten entfernt bzw. archiviert.
 
@@ -1235,7 +1235,7 @@ Die Ausgabe ist schema-valide.
 
 ## Phase 4 – DHCP / Asset Inventory
 
-**Status: Phase 4.1 und 4.2 implementiert und Azure-CI verifiziert. Phase 4.3 implementiert; CI-Verifikation nach Active/Active-Korrektur ausstehend.**
+**Status: Phase 4.1 bis 4.3 implementiert und Azure-CI verifiziert. Phase 4.4 implementiert; Azure-CI-Verifikation nach Korrektur des Provenance-Testkontexts ausstehend.**
 
 ### 4.1 Testbasis
 
@@ -1281,15 +1281,21 @@ Die Ausgabe ist schema-valide.
 
 **Verifikation:**
 
-- [ ] korrigierte Phase-4.3-Resolution auf Azure Ubuntu erfolgreich
-- [ ] korrigierte Phase-4.3-Resolution auf Azure Windows erfolgreich
+- [x] korrigierte Phase-4.3-Resolution auf Azure Ubuntu erfolgreich
+- [x] korrigierte Phase-4.3-Resolution auf Azure Windows erfolgreich
 
 ### 4.4 Asset Builder
 
-- [ ] Reservations in deterministische Asset Records überführen
-- [ ] MAC-normalisierte primäre Identität
-- [ ] Fallback Stable-ID ohne MAC
-- [ ] Source Reservation Refs
+- [x] Reservations in deterministische Asset Records überführen
+- [x] MAC-normalisierte primäre Identität
+- [x] Fallback Stable-ID ohne MAC
+- [x] Source Reservation Refs
+- [x] Vendor / Device Type / Model bis Phase 4.5 explizit als `UNKNOWN` erhalten
+
+**Verifikation:**
+
+- [ ] Phase-4.4-Asset-Builder auf Azure Ubuntu erfolgreich
+- [ ] Phase-4.4-Asset-Builder auf Azure Windows erfolgreich
 
 ### 4.5 OUI / Confidence / Inference
 
@@ -1455,6 +1461,21 @@ Phase 12 implementiert keine eigene DevOps-Projekt-/Repository-Bootstrap-Logik. 
 - [ ] Infrastructure Diff
 - [ ] GitHub-Migrationsmirror nach Abschluss der offenen Cutover-Aufräumarbeiten read-only/archiviert setzen
 
+### Abhängigkeit – Knowledge Base / Publishing
+
+**Bereits beschlossen:**
+
+- Der finale Veröffentlichungs- und Zugriffsweg für zentrale Betriebs-HowTos wird nicht in OpenSenseDocumentation festgelegt, sondern im Unterprojekt `00-Platform / DocumentationEngine` unter der dort offenen Entscheidung **„Knowledge Base / Publishing“**.
+- Das Firewall-Ersteinrichtungs-HowTo baut auf diesem zentralen Veröffentlichungsweg auf und führt keine eigene parallele Knowledge-Base-/Publishing-Lösung ein.
+- Das Firewall-Ersteinrichtungs-HowTo setzt voraus, dass der betreffende Kunde zuvor über den bestehenden DevOps-Bootstrap als `CUST-*` provisioniert wurde.
+
+**Noch offen:**
+
+- konkrete Ausgestaltung von **„Knowledge Base / Publishing“** in `00-Platform / DocumentationEngine`
+- daraus abgeleiteter finaler Zugriffs-, Berechtigungs- und Navigationsweg für zentrale Betriebs-HowTos
+
+Diese offene Publishing-Entscheidung blockiert nicht die technische Entwicklung des OPNsense-Parsers oder der Documentation Pipeline. Sie ist jedoch eine Abhängigkeit für die finale Bereitstellung des Firewall-Ersteinrichtungs-HowTos.
+
 ### Definition of Done
 
 ```text
@@ -1465,7 +1486,7 @@ Der Azure-DevOps-Build erzeugt dieselben deterministischen Modell-/Dokumentation
 GitHub ist nach erfolgreichem Cutover nicht mehr die operative Source of Truth.
 ```
 
-**Aktueller Teilstatus:** Die Component-CI für Phase 1–3 sowie die Phase-4.1/4.2-Regressionsbasis ist auf Azure DevOps verifiziert. Die vollständige produktive Kunden-/Dokumentationsautomation sowie zentrale Template-/Policy-Anbindung bleiben Phase 12 und sind noch offen.
+**Aktueller Teilstatus:** Die Component-CI für Phase 1–3 sowie Phase 4.1–4.3 ist auf Azure DevOps verifiziert. Phase 4.4 ist implementiert; die erneute Cross-Platform-CI nach Korrektur des Provenance-Testkontexts ist noch ausstehend. Die vollständige produktive Kunden-/Dokumentationsautomation sowie zentrale Template-/Policy-Anbindung bleiben Phase 12 und sind noch offen. Der finale Veröffentlichungs-/Zugriffsweg für zentrale Betriebs-HowTos bleibt abhängig von der offenen Entscheidung `00-Platform / DocumentationEngine` → „Knowledge Base / Publishing“.
 
 ---
 
@@ -1483,11 +1504,13 @@ Der Plattform-Cutover der Component-CI ist abgeschlossen. Der weitere fachliche 
 7. Phase 4.1 – DHCP Contract / Testbasis                       ✅
 8. Phase 4.2 – DHCP Fact Parser                                ✅
 9. Phase 4.3 – Authority Resolution implementieren             ✅
-10. Phase 4.3 – korrigierte Active/Active-Regel in Azure CI    ← NÄCHSTER SCHRITT
-11. Phase 4.4 – Asset Builder                                  danach
+10. Phase 4.3 – korrigierte Active/Active-Regel in Azure CI    ✅
+11. Phase 4.4 – Asset Builder implementieren                   ✅
+12. Phase 4.4 – Asset Builder in Azure CI verifizieren         ← NÄCHSTER SCHRITT
+13. Phase 4.5 – OUI / Confidence / Inference                   danach
 ```
 
-Die vollständige produktive Automatisierung bleibt Phase 12. Zentrale Pipeline-Templates, Build Policies und die spätere Kundenpipeline werden nicht vorgezogen, solange sie für die aktuelle fachliche Phase nicht benötigt werden.
+Die vollständige produktive Automatisierung bleibt Phase 12. Zentrale Pipeline-Templates, Build Policies und die spätere Kundenpipeline werden nicht vorgezogen, solange sie für die aktuelle fachliche Phase nicht benötigt werden. Der finale Veröffentlichungs- und Zugriffsweg des Firewall-Ersteinrichtungs-HowTos wird erst über die zentrale Entscheidung `00-Platform / DocumentationEngine` → „Knowledge Base / Publishing“ festgelegt; das HowTo setzt einen bereits als `CUST-*` provisionierten Kunden voraus.
 
 ---
 
