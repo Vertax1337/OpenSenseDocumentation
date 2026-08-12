@@ -1,0 +1,1 @@
+"""Deterministic asset-building components."""
