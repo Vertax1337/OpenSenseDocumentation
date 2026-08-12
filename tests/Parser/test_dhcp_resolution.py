@@ -83,7 +83,7 @@ class DhcpAuthorityResolutionTests(unittest.TestCase):
 
         self.assertTrue(kea_lan["enabled"])
         self.assertTrue(kea_lan["authoritative"])
-        self.assertTrue(legacy_lan["enabled"])
+        self.assertFalse(legacy_lan["enabled"])
         self.assertFalse(legacy_lan["authoritative"])
         self.assertTrue(legacy_opt4["enabled"])
         self.assertTrue(legacy_opt4["authoritative"])
@@ -155,12 +155,17 @@ class DhcpAuthorityResolutionTests(unittest.TestCase):
                 [], errors, f"{fixture}: {errors[0].message if errors else ''}"
             )
 
-    def test_ambiguous_active_kea_services_fail_hard(self):
+    def test_kea_and_legacy_both_enabled_fail_hard(self):
+        facts, interfaces, networks = parse_fixture("kea-and-legacy-both-enabled.xml")
+        with self.assertRaisesRegex(ParserError, "Conflicting enabled DHCP services"):
+            resolve_dhcp_model(facts, interfaces, networks)
+
+    def test_duplicate_enabled_kea_services_fail_hard(self):
         facts, interfaces, networks = parse_fixture("kea-only.xml")
         duplicate = dict(facts["services"][0])
         duplicate["evidence"] = list(duplicate["evidence"])
         facts["services"].append(duplicate)
-        with self.assertRaisesRegex(ParserError, "Ambiguous DHCP authority"):
+        with self.assertRaisesRegex(ParserError, "Conflicting enabled DHCP services"):
             resolve_dhcp_model(facts, interfaces, networks)
 
     def test_full_parser_wires_resolved_dhcp_into_canonical_model(self):
