@@ -25,7 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Pester 5
+      - name: Install Pester 5.9.0
         shell: ${{ matrix.shell }}
         run: |
           $ErrorActionPreference = 'Stop'
@@ -36,8 +36,9 @@ jobs:
           }
 
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-          Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -MinimumVersion 5.5.0
-          Import-Module Pester -MinimumVersion 5.5.0 -Force
+          Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -RequiredVersion 5.9.0
+          Remove-Module Pester -Force -ErrorAction SilentlyContinue
+          Import-Module Pester -RequiredVersion 5.9.0 -Force
 
           Write-Host "PowerShell: $($PSVersionTable.PSVersion)"
           Write-Host "Pester: $((Get-Module Pester).Version)"
@@ -46,7 +47,8 @@ jobs:
         shell: ${{ matrix.shell }}
         run: |
           $ErrorActionPreference = 'Stop'
-          Import-Module Pester -MinimumVersion 5.5.0 -Force
+          Remove-Module Pester -Force -ErrorAction SilentlyContinue
+          Import-Module Pester -RequiredVersion 5.9.0 -Force
 
           $config = New-PesterConfiguration
           $config.Run.Path = './tests'
