@@ -1,0 +1,52 @@
+jobs:
+  - job: Parser_Linux
+    displayName: Core Parser / Ubuntu / Python 3.12
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+      - checkout: self
+        clean: true
+
+      - task: UsePythonVersion@0
+        displayName: Use Python 3.12
+        inputs:
+          versionSpec: '3.12'
+          architecture: x64
+
+      - script: python -m pip install --requirement requirements-ci.txt
+        displayName: Install CI dependencies
+
+      - script: python -m compileall -q src/Parser
+        displayName: Compile parser
+
+      - script: python -m unittest discover -s tests/Parser -v
+        displayName: Run parser regression tests
+
+      - script: python tools/validate_schema.py
+        displayName: Validate base schema fixtures
+
+  - job: Parser_Windows
+    displayName: Core Parser / Windows / Python 3.12
+    pool:
+      vmImage: windows-latest
+    steps:
+      - checkout: self
+        clean: true
+
+      - task: UsePythonVersion@0
+        displayName: Use Python 3.12
+        inputs:
+          versionSpec: '3.12'
+          architecture: x64
+
+      - script: python -m pip install --requirement requirements-ci.txt
+        displayName: Install CI dependencies
+
+      - script: python -m compileall -q src/Parser
+        displayName: Compile parser
+
+      - script: python -m unittest discover -s tests/Parser -v
+        displayName: Run parser regression tests
+
+      - script: python tools/validate_schema.py
+        displayName: Validate base schema fixtures

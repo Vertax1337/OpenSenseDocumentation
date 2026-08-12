@@ -1,0 +1,72 @@
+jobs:
+  - job: Sanitizer_PS51
+    displayName: Sanitizer / Windows PowerShell 5.1
+    pool:
+      vmImage: windows-latest
+    steps:
+      - checkout: self
+        clean: true
+
+      - task: PowerShell@2
+        displayName: Install Pester 5
+        inputs:
+          targetType: inline
+          pwsh: false
+          script: |
+            $ErrorActionPreference = 'Stop'
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Install-PackageProvider -Name NuGet -Scope CurrentUser -Force | Out-Null
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+            Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -MinimumVersion 5.5.0
+            Import-Module Pester -MinimumVersion 5.5.0 -Force
+            Write-Host "PowerShell: $($PSVersionTable.PSVersion)"
+            Write-Host "Pester: $((Get-Module Pester).Version)"
+
+      - task: PowerShell@2
+        displayName: Run Pester
+        inputs:
+          targetType: inline
+          pwsh: false
+          script: |
+            $ErrorActionPreference = 'Stop'
+            Import-Module Pester -MinimumVersion 5.5.0 -Force
+            $config = New-PesterConfiguration
+            $config.Run.Path = './tests'
+            $config.Run.Exit = $true
+            $config.Output.Verbosity = 'Detailed'
+            Invoke-Pester -Configuration $config
+
+  - job: Sanitizer_PS7
+    displayName: Sanitizer / PowerShell 7
+    pool:
+      vmImage: windows-latest
+    steps:
+      - checkout: self
+        clean: true
+
+      - task: PowerShell@2
+        displayName: Install Pester 5
+        inputs:
+          targetType: inline
+          pwsh: true
+          script: |
+            $ErrorActionPreference = 'Stop'
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+            Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -MinimumVersion 5.5.0
+            Import-Module Pester -MinimumVersion 5.5.0 -Force
+            Write-Host "PowerShell: $($PSVersionTable.PSVersion)"
+            Write-Host "Pester: $((Get-Module Pester).Version)"
+
+      - task: PowerShell@2
+        displayName: Run Pester
+        inputs:
+          targetType: inline
+          pwsh: true
+          script: |
+            $ErrorActionPreference = 'Stop'
+            Import-Module Pester -MinimumVersion 5.5.0 -Force
+            $config = New-PesterConfiguration
+            $config.Run.Path = './tests'
+            $config.Run.Exit = $true
+            $config.Output.Verbosity = 'Detailed'
+            Invoke-Pester -Configuration $config

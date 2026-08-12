@@ -1,0 +1,28 @@
+jobs:
+  - job: SchemaValidation
+    displayName: Canonical Model Schema / Python 3.13
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+      - checkout: self
+        clean: true
+
+      - task: UsePythonVersion@0
+        displayName: Use Python 3.13
+        inputs:
+          versionSpec: '3.13'
+          architecture: x64
+
+      - script: python -m pip install --requirement requirements-ci.txt
+        displayName: Install pinned schema validator
+
+      - script: python tools/validate_schema.py
+        displayName: Validate schema and fixtures
+
+      - bash: |
+          set -euo pipefail
+          python tools/canonicalize_json.py schemas/examples/minimal.valid.json "$(Agent.TempDirectory)/model-a.json"
+          python tools/canonicalize_json.py schemas/examples/minimal.valid.json "$(Agent.TempDirectory)/model-b.json"
+          cmp "$(Agent.TempDirectory)/model-a.json" "$(Agent.TempDirectory)/model-b.json"
+          sha256sum "$(Agent.TempDirectory)/model-a.json" "$(Agent.TempDirectory)/model-b.json"
+        displayName: Verify canonical JSON reproducibility

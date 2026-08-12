@@ -1,0 +1,19 @@
+# Azure DevOps CI migration baseline for OPNsenseDocumentation.
+# Register this file once in Azure DevOps as the pipeline YAML path:
+#   /pipelines/azure-pipelines.yml
+#
+# Pull-request validation for Azure Repos is configured later through
+# Branch Policies -> Build validation. The YAML pipeline itself handles CI pushes.
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+
+pr: none
+
+jobs:
+  - template: templates/sanitizer-tests.yml
+  - template: templates/schema-tests.yml
+  - template: templates/parser-tests.yml
