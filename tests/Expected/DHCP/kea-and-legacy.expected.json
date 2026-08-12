@@ -1,0 +1,231 @@
+{
+  "services": [
+    {
+      "id": "dhcp-service:isc-dhcpd-ipv4-lan",
+      "classification": "DERIVED",
+      "evidence": [
+        {
+          "sourceType": "opnsense-config",
+          "sourceId": "kea-and-legacy.xml",
+          "path": "/opnsense/dhcpd/lan",
+          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "note": null
+        }
+      ],
+      "derivation": {
+        "ruleId": "dhcp.authority.v1",
+        "basis": "Legacy DHCP configuration is retained for LAN but is disabled because no enable marker is present; enabled Kea DHCPv4 is assigned to LAN.",
+        "inputRefs": [
+          "interface:lan"
+        ]
+      },
+      "implementation": "isc-dhcpd",
+      "enabled": false,
+      "authoritative": false,
+      "interfaceRefs": [
+        {
+          "id": "interface:lan",
+          "type": "interface"
+        }
+      ],
+      "legacy": true
+    },
+    {
+      "id": "dhcp-service:isc-dhcpd-ipv4-opt4",
+      "classification": "DERIVED",
+      "evidence": [
+        {
+          "sourceType": "opnsense-config",
+          "sourceId": "kea-and-legacy.xml",
+          "path": "/opnsense/dhcpd/opt4",
+          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "note": null
+        }
+      ],
+      "derivation": {
+        "ruleId": "dhcp.authority.v1",
+        "basis": "Legacy DHCP configuration is retained for opt4 but is disabled because no enable marker is present.",
+        "inputRefs": [
+          "interface:opt4"
+        ]
+      },
+      "implementation": "isc-dhcpd",
+      "enabled": false,
+      "authoritative": false,
+      "interfaceRefs": [
+        {
+          "id": "interface:opt4",
+          "type": "interface"
+        }
+      ],
+      "legacy": true
+    },
+    {
+      "id": "dhcp-service:kea-ipv4-lan",
+      "classification": "DERIVED",
+      "evidence": [
+        {
+          "sourceType": "opnsense-config",
+          "sourceId": "kea-and-legacy.xml",
+          "path": "/opnsense/OPNsense/Kea/dhcp4/general",
+          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "note": null
+        }
+      ],
+      "derivation": {
+        "ruleId": "dhcp.authority.v1",
+        "basis": "Kea DHCPv4 is enabled and explicitly assigned to LAN; Kea takes precedence over legacy DHCP on the same interface.",
+        "inputRefs": [
+          "interface:lan"
+        ]
+      },
+      "implementation": "kea",
+      "enabled": true,
+      "authoritative": true,
+      "interfaceRefs": [
+        {
+          "id": "interface:lan",
+          "type": "interface"
+        }
+      ],
+      "legacy": false
+    }
+  ],
+  "scopes": [
+    {
+      "id": "dhcp-scope:11111111-1111-4111-8111-111111111111",
+      "classification": "DERIVED",
+      "evidence": [
+        {
+          "sourceType": "opnsense-config",
+          "sourceId": "kea-and-legacy.xml",
+          "path": "/opnsense/OPNsense/Kea/dhcp4/subnets/subnet4",
+          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "note": null
+        }
+      ],
+      "derivation": {
+        "ruleId": "dhcp.scope-interface.v1",
+        "basis": "The Kea subnet uniquely matches the configured IPv4 network of LAN among Kea-assigned interfaces.",
+        "inputRefs": [
+          "dhcp-service:kea-ipv4-lan",
+          "interface:lan"
+        ]
+      },
+      "serviceRef": {
+        "id": "dhcp-service:kea-ipv4-lan",
+        "type": "dhcp-service"
+      },
+      "interfaceRef": {
+        "id": "interface:lan",
+        "type": "interface"
+      },
+      "subnet": "192.0.2.0/24",
+      "pools": [
+        {
+          "start": "192.0.2.50",
+          "end": "192.0.2.199"
+        }
+      ],
+      "gateway": "192.0.2.1",
+      "dnsServers": [
+        "192.0.2.1"
+      ],
+      "domainName": "example.invalid",
+      "searchDomains": [
+        "example.invalid"
+      ],
+      "ntpServers": [
+        "192.0.2.1"
+      ],
+      "leaseTimeSeconds": 4000
+    },
+    {
+      "id": "dhcp-scope:isc-dhcpd-ipv4-lan",
+      "classification": "DERIVED",
+      "evidence": [
+        {
+          "sourceType": "opnsense-config",
+          "sourceId": "kea-and-legacy.xml",
+          "path": "/opnsense/dhcpd/lan",
+          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "note": null
+        }
+      ],
+      "derivation": {
+        "ruleId": "dhcp.scope-interface.v1",
+        "basis": "Legacy DHCP scope is structurally bound to the LAN interface block.",
+        "inputRefs": [
+          "dhcp-service:isc-dhcpd-ipv4-lan",
+          "interface:lan"
+        ]
+      },
+      "serviceRef": {
+        "id": "dhcp-service:isc-dhcpd-ipv4-lan",
+        "type": "dhcp-service"
+      },
+      "interfaceRef": {
+        "id": "interface:lan",
+        "type": "interface"
+      },
+      "subnet": "192.0.2.0/24",
+      "pools": [
+        {
+          "start": "192.0.2.10",
+          "end": "192.0.2.245"
+        }
+      ],
+      "gateway": null,
+      "dnsServers": [],
+      "domainName": null,
+      "searchDomains": [],
+      "ntpServers": [],
+      "leaseTimeSeconds": null
+    },
+    {
+      "id": "dhcp-scope:isc-dhcpd-ipv4-opt4",
+      "classification": "DERIVED",
+      "evidence": [
+        {
+          "sourceType": "opnsense-config",
+          "sourceId": "kea-and-legacy.xml",
+          "path": "/opnsense/dhcpd/opt4",
+          "sourceSha256": "DE4B689F45415B6F91A8AE29EF9073219FC97EB8FB17E0FF02D93DD99DBDC509",
+          "note": null
+        }
+      ],
+      "derivation": {
+        "ruleId": "dhcp.scope-interface.v1",
+        "basis": "Legacy DHCP scope is structurally bound to the opt4 interface block.",
+        "inputRefs": [
+          "dhcp-service:isc-dhcpd-ipv4-opt4",
+          "interface:opt4"
+        ]
+      },
+      "serviceRef": {
+        "id": "dhcp-service:isc-dhcpd-ipv4-opt4",
+        "type": "dhcp-service"
+      },
+      "interfaceRef": {
+        "id": "interface:opt4",
+        "type": "interface"
+      },
+      "subnet": "198.51.100.0/24",
+      "pools": [
+        {
+          "start": "198.51.100.100",
+          "end": "198.51.100.200"
+        }
+      ],
+      "gateway": "198.51.100.1",
+      "dnsServers": [
+        "192.0.2.53"
+      ],
+      "domainName": null,
+      "searchDomains": [],
+      "ntpServers": [],
+      "leaseTimeSeconds": null
+    }
+  ],
+  "reservations": []
+}

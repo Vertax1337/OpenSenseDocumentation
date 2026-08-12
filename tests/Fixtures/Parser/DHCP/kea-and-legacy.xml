@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<opnsense>
+  <system>
+    <hostname>fw-dhcp-fixture</hostname>
+    <domain>example.invalid</domain>
+  </system>
+  <interfaces>
+    <lan>
+      <enable>1</enable>
+      <if>igc0</if>
+      <descr>LAN</descr>
+      <ipaddr>192.0.2.1</ipaddr>
+      <subnet>24</subnet>
+    </lan>
+    <opt4>
+      <enable>1</enable>
+      <if>igc2</if>
+      <descr>TEST</descr>
+      <ipaddr>198.51.100.1</ipaddr>
+      <subnet>24</subnet>
+    </opt4>
+  </interfaces>
+  <dhcpd>
+    <lan>
+      <range>
+        <from>192.0.2.10</from>
+        <to>192.0.2.245</to>
+      </range>
+    </lan>
+    <opt4>
+      <gateway>198.51.100.1</gateway>
+      <range>
+        <from>198.51.100.100</from>
+        <to>198.51.100.200</to>
+      </range>
+      <dnsserver>192.0.2.53</dnsserver>
+    </opt4>
+  </dhcpd>
+  <OPNsense>
+    <Kea>
+      <dhcp4 version="1.0.4" description="Kea DHCPv4 configuration">
+        <general>
+          <enabled>1</enabled>
+          <manual_config>0</manual_config>
+          <interfaces>lan</interfaces>
+          <valid_lifetime>4000</valid_lifetime>
+          <fwrules>1</fwrules>
+          <dhcp_socket_type>raw</dhcp_socket_type>
+        </general>
+        <subnets>
+          <subnet4 uuid="11111111-1111-4111-8111-111111111111">
+            <subnet>192.0.2.0/24</subnet>
+            <option_data_autocollect>0</option_data_autocollect>
+            <option_data>
+              <domain_name_servers>192.0.2.1</domain_name_servers>
+              <domain_search>example.invalid</domain_search>
+              <routers>192.0.2.1</routers>
+              <domain_name>example.invalid</domain_name>
+              <ntp_servers>192.0.2.1</ntp_servers>
+            </option_data>
+            <match-client-id>1</match-client-id>
+            <pools>192.0.2.50-192.0.2.199</pools>
+          </subnet4>
+        </subnets>
+        <reservations>
+
+        </reservations>
+        <ha_peers />
+      </dhcp4>
+    </Kea>
+  </OPNsense>
+</opnsense>

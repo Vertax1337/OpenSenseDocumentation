@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<opnsense>
+  <system>
+    <hostname>fw-dhcp-fixture</hostname>
+    <domain>example.invalid</domain>
+  </system>
+  <interfaces>
+    <lan>
+      <enable>1</enable>
+      <if>igc0</if>
+      <descr>LAN</descr>
+      <ipaddr>192.0.2.1</ipaddr>
+      <subnet>24</subnet>
+    </lan>
+  </interfaces>
+  <dhcpd>
+    <lan>
+      <enable>1</enable>
+      <gateway>192.0.2.1</gateway>
+      <range>
+        <from>192.0.2.100</from>
+        <to>192.0.2.180</to>
+      </range>
+      <dnsserver>192.0.2.1</dnsserver>
+      <ntpserver>192.0.2.1</ntpserver>
+    </lan>
+  </dhcpd>
+</opnsense>
