@@ -43,31 +43,26 @@ def _authority_basis(
 ) -> str:
     interface_name = str(service["interface"])
     implementation = str(service["implementation"])
+    ip_family = str(service.get("ipFamily") or "IPv4")
     enabled = bool(service["enabled"])
 
-    if authoritative and implementation == "kea":
-        return (
-            f"Kea DHCPv4 is enabled and explicitly assigned to {interface_name}; "
-            "Kea takes precedence over legacy DHCP on the same interface."
-        )
     if authoritative:
+        if implementation == "kea":
+            return (
+                f"Kea {ip_family} is enabled and explicitly assigned to {interface_name}; "
+                "it is the only configured-enabled DHCP implementation for this interface and IP family."
+            )
         return (
-            f"{implementation} is the only enabled DHCP implementation for "
-            f"{interface_name}/IPv4."
+            f"{implementation} is the only configured-enabled DHCP implementation for "
+            f"{interface_name}/{ip_family}."
         )
-    if implementation == "isc-dhcpd" and enabled and any(
-        item["implementation"] == "kea" and item["enabled"] for item in group
-    ):
-        return (
-            f"Legacy DHCP is enabled on {interface_name} but remains non-authoritative "
-            "because enabled Kea DHCPv4 is assigned to the same interface."
-        )
+
     if implementation == "isc-dhcpd" and not enabled and any(
         item["implementation"] == "kea" and item["enabled"] for item in group
     ):
         return (
             f"Legacy DHCP configuration is retained for {interface_name} but is disabled; "
-            "enabled Kea DHCPv4 is assigned to the same interface."
+            f"Kea {ip_family} is the only configured-enabled DHCP implementation on this interface."
         )
     if not enabled:
         return (
@@ -75,7 +70,7 @@ def _authority_basis(
             "but is disabled and therefore non-authoritative."
         )
     return (
-        f"{implementation} DHCP remains non-authoritative for {interface_name}/IPv4 "
+        f"{implementation} DHCP remains non-authoritative for {interface_name}/{ip_family} "
         f"under {AUTHORITY_RULE_ID}."
     )
 
@@ -104,41 +99,17 @@ def _resolve_services(
     service_map: dict[tuple[str, str, str], dict[str, Any]] = {}
 
     for (interface_name, ip_family), group in sorted(grouped.items()):
-        enabled_kea = [
-            item for item in group
-            if item.get("implementation") == "kea" and bool(item.get("enabled"))
-        ]
-        enabled_non_kea = [
-            item for item in group
-            if item.get("implementation") != "kea" and bool(item.get("enabled"))
-        ]
-
-        if len(enabled_kea) > 1:
+        enabled_services = [item for item in group if bool(item.get("enabled"))]
+        if len(enabled_services) > 1:
+            implementations = ", ".join(
+                sorted(str(item.get("implementation") or "unknown") for item in enabled_services)
+            )
             raise ParserError(
-                f"Ambiguous DHCP authority on {interface_name}/{ip_family}: "
-                "multiple enabled Kea services"
+                f"Conflicting enabled DHCP services on {interface_name}/{ip_family}: "
+                f"{implementations}. Runtime service availability cannot be determined from config.xml"
             )
 
-        authoritative_fact: dict[str, Any] | None = None
-        if enabled_kea:
-            non_legacy_competitors = [
-                item for item in enabled_non_kea
-                if item.get("implementation") != "isc-dhcpd"
-            ]
-            if non_legacy_competitors:
-                raise ParserError(
-                    f"Ambiguous DHCP authority on {interface_name}/{ip_family}: "
-                    "enabled Kea and another non-legacy implementation"
-                )
-            authoritative_fact = enabled_kea[0]
-        else:
-            if len(enabled_non_kea) > 1:
-                raise ParserError(
-                    f"Ambiguous DHCP authority on {interface_name}/{ip_family}: "
-                    "multiple enabled non-Kea services"
-                )
-            authoritative_fact = enabled_non_kea[0] if enabled_non_kea else None
-
+        authoritative_fact = enabled_services[0] if enabled_services else None
         interface = interface_by_name[interface_name]
         interface_id = str(interface["id"])
 
@@ -363,9 +334,10 @@ def resolve_dhcp_model(
 ) -> dict[str, list[dict[str, Any]]]:
     """Resolve parsed DHCP facts into the canonical DHCP model.
 
-    Authority is resolved per interface and IP family. Kea takes precedence over
-    legacy ISC DHCP only when Kea is enabled and explicitly assigned to that
-    interface. Ambiguous active configurations fail instead of being guessed.
+    Authority is resolved per interface and IP family only when exactly one
+    DHCP implementation is configured enabled. Multiple configured-enabled
+    implementations on the same interface/IP family are a hard configuration
+    conflict because runtime service availability cannot be proven from config.xml.
     """
     interface_by_name = {
         str(item["name"]): item for item in interfaces if item.get("name")
