@@ -2,7 +2,9 @@
 
 Deterministischer Generator für MSP-Kundendokumentationen auf Basis von OPNsense-`config.xml`-Dateien.
 
-> **Source of Truth:** [`Umsetzungsplan.md`](./Umsetzungsplan.md)
+> **Source of Truth:** [`Umsetzungsplan.md`](./Umsetzungsplan.md)  
+> **Operative CI/CD-Zielplattform:** Azure DevOps `BSSE-CloudOps / 10-Automation / 10-Automation-OPNsenseDocumentation`  
+> **GitHub:** temporärer Migrations-/Authoring-Mirror bis zum vollständigen Repository-/Policy-Cleanup
 
 ## Grundprinzip
 
@@ -29,7 +31,8 @@ KI ist später nur optional für sprachliche Glättung zulässig und darf keine 
 - Repository-Struktur vorbereitet
 - SemVer-Versionierung festgelegt
 - Pester-Teststruktur angelegt
-- GitHub-Actions-Testmatrix für Windows PowerShell 5.1 und PowerShell 7 vorbereitet
+- Azure-Pipelines-Baseline unter `pipelines/` implementiert und erfolgreich verifiziert
+- GitHub Actions bleiben vorerst als Migrations-/Vergleichsartefakte erhalten
 
 ### Phase 1 – Sanitizer
 
@@ -43,6 +46,8 @@ KI ist später nur optional für sprachliche Glättung zulässig und darf keine 
 - Report enthält keine lokalen Vollpfade
 - relative Output-/Reportpfade werden PowerShell-nativ aufgelöst
 - Regression gegen den PowerShell-`List[object]`/`@(...)`-Engine-Bug
+- bereits redigierte Basic-Auth-URLs werden nicht als Residual Secret fehlklassifiziert
+- Azure CI erfolgreich auf Windows PowerShell 5.1 und PowerShell 7 verifiziert
 
 ### Phase 2 – Canonical Infrastructure Model
 
@@ -58,7 +63,7 @@ KI ist später nur optional für sprachliche Glättung zulässig und darf keine 
 - Asset-Enrichment mit eigener Confidence je Vendor / Device Type / Model
 - reproduzierbare JSON-Serialisierung
 - positive und negative Schema-Fixtures
-- eigene Schema-CI
+- Azure Schema-CI erfolgreich verifiziert
 
 Details: [`docs/Phase-2-Canonical-Infrastructure-Model.md`](./docs/Phase-2-Canonical-Infrastructure-Model.md)
 
@@ -74,7 +79,7 @@ Details: [`docs/Phase-2-Canonical-Infrastructure-Model.md`](./docs/Phase-2-Canon
 - route-based IPsec wird nur bei exaktem `tunnel_remote == gateway.address` mit Gateway/VTI verknüpft
 - öffentliche IPsec-Gegenstelle bleibt getrennt von VTI-Adresse
 - semantischer Fingerprint-Regressionstest für plattformübergreifend identische Modellinhalte
-- Tests laufen auf Linux und Windows
+- Azure Parser-CI erfolgreich auf Ubuntu und Windows verifiziert
 
 Details: [`docs/Phase-3-Core-Parser.md`](./docs/Phase-3-Core-Parser.md)
 
@@ -151,15 +156,17 @@ python -m unittest discover -s tests/Parser -v
 python tools/validate_schema.py
 ```
 
-Die PowerShell-CI testet auf Windows gegen:
+Die Azure-PowerShell-CI testet auf Windows gegen:
 
 - Windows PowerShell 5.1
 - PowerShell 7
 
-Die Parser-CI testet denselben semantischen Modell-Fingerprint auf:
+Die Azure-Parser-CI testet denselben semantischen Modell-Fingerprint auf:
 
-- Ubuntu
-- Windows
+- Ubuntu / Python 3.12
+- Windows / Python 3.12
+
+Der Canonical-Model-Schema-Job läuft auf Ubuntu mit Python 3.13. Alle fünf Azure-Pipelines-Jobs der Phase-1–3-Baseline wurden erfolgreich ausgeführt.
 
 ## Versionierung
 
