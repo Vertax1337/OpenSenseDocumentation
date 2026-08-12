@@ -1,10 +1,12 @@
 # Umsetzungsplan – OpenSenseDocumentation
 
-> **Status:** Verbindliche Source of Truth für die Entwicklung  
-> **Repository:** `Vertax1337/OpenSenseDocumentation`  
+> **Status:** Verbindliche fachliche Source of Truth für die Entwicklung  
+> **Operatives Repository:** Azure DevOps `BSSE-CloudOps / 10-Automation / 10-Automation-OPNsenseDocumentation`  
+> **GitHub-Migrationsmirror:** `Vertax1337/OpenSenseDocumentation`  
 > **Projektstand:** `0.3.0`  
 > **Aktuelle fachliche Phase:** Phase 4 – DHCP / Asset Inventory  
 > **CI/CD-Zielplattform:** Azure DevOps über die bestehende DevOps-Bootstrap-Struktur  
+> **CI-Status:** Phase 1–3 auf Azure Pipelines erfolgreich verifiziert (Windows PowerShell 5.1, PowerShell 7, Schema, Parser Ubuntu/Windows)  
 > **Grundsatz:** Technische Fakten werden nicht durch ein LLM erfunden oder frei interpretiert. Parser, Regeln, Korrelation, Validierung, Diagramme und Dokumentstruktur müssen deterministisch sein.
 
 ---
@@ -164,6 +166,9 @@ Bereits aufgetreten und dauerhaft zu schützen:
 8. Residual Scan entscheidet über `Clean`.
 9. Reports enthalten keine lokalen Vollpfade.
 10. Original-XML wird niemals überschrieben.
+11. Bereits redigierte Basic-Auth-URLs dürfen vom Residual Scan nicht erneut als Secret klassifiziert werden.
+12. Pester-Tests verwenden keine automatische PowerShell-Variable `$input` als Testpfadvariable.
+13. CI pinnt Pester explizit auf die Pester-5-Linie, damit ein Major-Upgrade die PS5.1/PS7-Testsemantik nicht unkontrolliert verändert.
 
 ---
 
@@ -837,7 +842,15 @@ OpenSenseDocumentation ist verantwortlich für:
 
 Innerhalb dieses Repositories wird **keine zweite Kunden-/Repository-Bootstrap-Logik** aufgebaut.
 
-Die derzeit vorhandenen GitHub-Actions-Workflows sind Übergangs-/Migrationsartefakte und nicht die langfristige CI/CD-Source-of-Truth.
+Die Azure-Pipelines-Migrationsbaseline unter `/pipelines/azure-pipelines.yml` ist auf dem Azure-Repos-Ziel registriert und für Phase 1–3 erfolgreich verifiziert. Der erfolgreiche Zielplattform-Lauf umfasst:
+
+- Sanitizer / Windows PowerShell 5.1
+- Sanitizer / PowerShell 7
+- Canonical Model Schema
+- Core Parser / Ubuntu / Python 3.12
+- Core Parser / Windows / Python 3.12
+
+Die vorhandenen GitHub-Actions-Workflows bleiben vorerst als Migrations-/Vergleichsartefakte erhalten. Sie sind nicht mehr die operative CI/CD-Source-of-Truth und werden erst nach Abschluss der noch offenen Repository-/Policy-Aufräumarbeiten entfernt bzw. archiviert.
 
 ---
 
@@ -878,7 +891,7 @@ Tests
       └─ Build Manifest
 ```
 
-Der spätere Azure-Pipelines-Contract konsumiert die zentrale Bootstrap-/Template-Struktur statt eine eigene Plattformbasis zu duplizieren.
+Die aktuell verifizierte Azure-Pipelines-Baseline ist absichtlich repository-lokal gehalten, um den Plattform-Cutover unabhängig zu validieren. Wiederverwendbare, allgemeine Jobs werden erst anschließend in die zentrale Bootstrap-/Template-Struktur ausgelagert; die fachliche Pipeline darf dadurch nicht verändert werden.
 
 ---
 
@@ -1044,7 +1057,7 @@ OpenSenseDocumentation/
 
 ## Phase 0 – Repository-Basis
 
-**Status: implementiert.**
+**Status: implementiert, Azure-CI-Baseline verifiziert.**
 
 - [x] Repository-Struktur anlegen
 - [x] README erstellen
@@ -1053,17 +1066,19 @@ OpenSenseDocumentation/
 - [x] Pester-Teststruktur anlegen
 - [x] `.gitignore` gegen reale Kundenconfigs / generierte Kundendaten
 - [x] GitHub-Actions-Baseline für Übergangszeit anlegen
+- [x] Azure-Pipelines-Baseline unter `/pipelines/` anlegen
 
 **Verifikation:**
 
 - [x] Implementierungsstand im Repository dokumentiert
-- [ ] GitHub CI für den aktuellen Stand als erfolgreich verifiziert
+- [x] Azure Pipelines lädt Haupt-YAML und Templates erfolgreich
+- [x] Microsoft-hosted Agent-Ausführung erfolgreich verifiziert
 
 ---
 
 ## Phase 1 – Sanitizer stabilisieren
 
-**Status: implementiert, Sanitizer-Baseline `1.1.0`.**
+**Status: implementiert und Azure-CI verifiziert, Sanitizer-Baseline `1.1.0`.**
 
 - [x] Sanitizer v1.x übernehmen
 - [x] alle bekannten bisherigen Fixes integrieren
@@ -1076,6 +1091,8 @@ OpenSenseDocumentation/
 - [x] Audit-Metadaten entfernen
 - [x] relative Output-/Report-Pfade absichern
 - [x] Generic-List-/PowerShell-5.1-Regression absichern
+- [x] redigierte Basic-Auth-URL gegen Residual-Scan-False-Positive absichern
+- [x] Pester-5-Version für CI explizit pinnen
 
 ### Definition of Done
 
@@ -1090,14 +1107,14 @@ Report enthält keine lokalen Vollpfade.
 **Verifikation:**
 
 - [x] synthetische Regression-Fixtures vorhanden
-- [ ] GitHub CI Windows PowerShell 5.1 erfolgreich verifiziert
-- [ ] GitHub CI PowerShell 7 erfolgreich verifiziert
+- [x] Azure CI Windows PowerShell 5.1 erfolgreich verifiziert
+- [x] Azure CI PowerShell 7 erfolgreich verifiziert
 
 ---
 
 ## Phase 2 – Canonical Schema
 
-**Status: implementiert, Schema `1.0.0`.**
+**Status: implementiert und Azure-CI verifiziert, Schema `1.0.0`.**
 
 - [x] `infrastructure-model.schema.json`
 - [x] modulare Schema-Contracts
@@ -1120,13 +1137,13 @@ Parser und Renderer haben einen versionierten technischen Vertrag.
 **Verifikation:**
 
 - [x] Schema-/Fixture-Validierung lokal durchgeführt
-- [ ] GitHub Schema-CI erfolgreich verifiziert
+- [x] Azure Schema-CI erfolgreich verifiziert
 
 ---
 
 ## Phase 3 – Core Parser
 
-**Status: implementiert, lokal verifiziert.**
+**Status: implementiert, lokal und Azure-CI verifiziert.**
 
 - [x] System
 - [x] Interfaces
@@ -1143,7 +1160,7 @@ Parser und Renderer haben einen versionierten technischen Vertrag.
 - [x] harte Prüfung von Sanitizer-Status und SHA-256
 - [x] synthetische Parser-Regressionstests
 - [x] semantischer Golden-Fingerprint
-- [x] Windows-/Linux-CI-Definition für Übergangszeit
+- [x] Windows-/Linux-CI-Definition
 
 ### Definition of Done
 
@@ -1157,7 +1174,9 @@ Die Ausgabe ist schema-valide.
 
 - [x] synthetische Regressionstests lokal erfolgreich
 - [x] reale sanitisierte Proof-of-Concept-Config lokal schema-valide verarbeitet
-- [ ] GitHub Parser-CI erfolgreich verifiziert
+- [x] Azure Parser-CI auf Ubuntu / Python 3.12 erfolgreich verifiziert
+- [x] Azure Parser-CI auf Windows / Python 3.12 erfolgreich verifiziert
+- [x] semantischer Golden-Fingerprint auf der Zielpipeline erfolgreich geprüft
 
 ---
 
@@ -1339,8 +1358,10 @@ Kea + Legacy auf LAN
 
 Phase 12 implementiert keine eigene DevOps-Projekt-/Repository-Bootstrap-Logik. Sie bindet OpenSenseDocumentation an die bestehende DevOps-Bootstrap-Struktur an.
 
-- [ ] GitHub-Repository mit vollständiger Git-Historie in das vom DevOps-Bootstrap vorgesehene Azure-Repos-Ziel migrieren
-- [ ] bestehende GitHub-Actions-Prüfungen fachlich auf Azure Pipelines abbilden
+- [x] GitHub-Repository mit Git-Historie in das vom DevOps-Bootstrap vorgesehene Azure-Repos-Ziel migriert
+- [x] bestehende Sanitizer-/Schema-/Parser-Prüfungen fachlich auf Azure Pipelines abgebildet
+- [x] Azure-Pipelines-Migrationsbaseline erfolgreich auf Microsoft-hosted Agents ausgeführt
+- [x] Azure DevOps als operative CI/CD-Source-of-Truth für OpenSenseDocumentation festgelegt
 - [ ] zentrale Pipeline-Templates der Bootstrap-Struktur konsumieren
 - [ ] Build Validation / Policies an Bootstrap-Vorgaben anbinden
 - [ ] Config Change Detection
@@ -1348,7 +1369,7 @@ Phase 12 implementiert keine eigene DevOps-Projekt-/Repository-Bootstrap-Logik. 
 - [ ] Pipeline Artifacts für Modell, Reports, Diagramme, DOCX/PDF
 - [ ] Build Report
 - [ ] Infrastructure Diff
-- [ ] GitHub erst nach verifiziertem Azure-DevOps-Cutover read-only/archiviert setzen
+- [ ] GitHub-Migrationsmirror nach Abschluss der offenen Cutover-Aufräumarbeiten read-only/archiviert setzen
 
 ### Definition of Done
 
@@ -1360,23 +1381,25 @@ Der Azure-DevOps-Build erzeugt dieselben deterministischen Modell-/Dokumentation
 GitHub ist nach erfolgreichem Cutover nicht mehr die operative Source of Truth.
 ```
 
+**Aktueller Teilstatus:** Die Component-CI für Phase 1–3 ist auf Azure DevOps verifiziert. Die vollständige produktive Kunden-/Dokumentationsautomation sowie zentrale Template-/Policy-Anbindung bleiben Phase 12 und sind noch offen.
+
 ---
 
 # 27. Empfohlener nächster Ablauf
 
-Vor weiterer fachlicher Implementierung:
+Der Plattform-Cutover der Component-CI ist abgeschlossen. Der weitere fachliche Ausbau erfolgt ab jetzt gegen die Azure-DevOps-Zielplattform.
 
 ```text
-1. Phase-0–3-Status im Source-of-Truth synchronisieren  ← erledigt mit diesem Stand
-2. DevOps-Bootstrap / Azure-Repos-Ziel gegenprüfen
-3. Repository mit Git-Historie nach Azure DevOps migrieren
-4. bestehende Sanitizer-/Schema-/Parser-Tests in Azure Pipelines abbilden
-5. deterministische Ergebnisse zwischen bisherigem Stand und Azure DevOps vergleichen
-6. Azure DevOps als operative Source of Truth festlegen
-7. Phase 4 auf der Zielplattform implementieren
+1. Phase-0–3-Status im Source-of-Truth synchronisieren          ✅
+2. DevOps-Bootstrap / Azure-Repos-Ziel gegenprüfen             ✅
+3. Repository mit Git-Historie nach Azure DevOps migrieren     ✅
+4. Sanitizer-/Schema-/Parser-Tests in Azure Pipelines abbilden ✅
+5. deterministische Regressionen auf Azure DevOps verifizieren ✅
+6. Azure DevOps als operative CI/CD-Source-of-Truth festlegen  ✅
+7. Phase 4 – DHCP / Asset Inventory implementieren             ← NÄCHSTER SCHRITT
 ```
 
-Die vollständige produktive Automatisierung bleibt Phase 12; lediglich der Plattform-Cutover wird vor Phase 4 durchgeführt, damit die weitere Entwicklung nicht auf einer Plattform fortgesetzt wird, die anschließend erneut migriert werden müsste.
+Die vollständige produktive Automatisierung bleibt Phase 12. Zentrale Pipeline-Templates, Build Policies und die spätere Kundenpipeline werden nicht vorgezogen, solange sie für die aktuelle fachliche Phase nicht benötigt werden.
 
 ---
 
