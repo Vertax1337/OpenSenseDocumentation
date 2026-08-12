@@ -17,6 +17,7 @@ REQUIRED_FIXTURES = {
     "legacy-only.xml",
     "kea-only.xml",
     "kea-and-legacy.xml",
+    "kea-and-legacy-both-enabled.xml",
     "kea-reservations.xml",
     "duplicate-ip.xml",
     "invalid-pool.xml",
@@ -80,8 +81,14 @@ class DhcpFixtureContractTests(unittest.TestCase):
     def test_mixed_interface_fixture_encodes_per_interface_authority_input(self):
         root = ET.parse(FIXTURES / "mixed-interface-authority.xml").getroot()
         self.assertEqual("lan", root.findtext("./OPNsense/Kea/dhcp4/general/interfaces"))
-        self.assertEqual("1", root.findtext("./dhcpd/lan/enable"))
+        self.assertIsNone(root.find("./dhcpd/lan/enable"))
         self.assertEqual("1", root.findtext("./dhcpd/opt4/enable"))
+
+    def test_both_enabled_fixture_encodes_runtime_conflict_input(self):
+        root = ET.parse(FIXTURES / "kea-and-legacy-both-enabled.xml").getroot()
+        self.assertEqual("1", root.findtext("./OPNsense/Kea/dhcp4/general/enabled"))
+        self.assertEqual("lan", root.findtext("./OPNsense/Kea/dhcp4/general/interfaces"))
+        self.assertEqual("1", root.findtext("./dhcpd/lan/enable"))
 
     def test_expected_kea_and_legacy_dhcp_contract_is_schema_valid(self):
         expected = json.loads(EXPECTED.read_text(encoding="utf-8"))
