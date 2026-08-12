@@ -10,15 +10,15 @@ Describe 'Sanitize-OPNsenseConfig.ps1' {
   BeforeEach {
     $caseDir=Join-Path $TestDrive ([Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $caseDir -Force | Out-Null
-    $input=Join-Path $caseDir 'config.xml'; Copy-Item -LiteralPath $fixture -Destination $input
+    $inputPath=Join-Path $caseDir 'config.xml'; Copy-Item -LiteralPath $fixture -Destination $inputPath
     $output=Join-Path $caseDir 'generated\config.sanitized.xml'
     $reportPath=Join-Path $caseDir 'generated\sanitization-report.json'
   }
 
   It 'never modifies the source config.xml' {
-    $before=(Get-FileHash -LiteralPath $input -Algorithm SHA256).Hash
-    & $sanitizer -InputPath $input -OutputPath $output -ReportPath $reportPath
-    (Get-FileHash -LiteralPath $input -Algorithm SHA256).Hash | Should -BeExactly $before
+    $before=(Get-FileHash -LiteralPath $inputPath -Algorithm SHA256).Hash
+    & $sanitizer -InputPath $inputPath -OutputPath $output -ReportPath $reportPath
+    (Get-FileHash -LiteralPath $inputPath -Algorithm SHA256).Hash | Should -BeExactly $before
   }
 
   It 'creates relative nested output directories' {
@@ -30,7 +30,7 @@ Describe 'Sanitize-OPNsenseConfig.ps1' {
   }
 
   It 'redacts secrets and preserves network structure' {
-    & $sanitizer -InputPath $input -OutputPath $output -ReportPath $reportPath
+    & $sanitizer -InputPath $inputPath -OutputPath $output -ReportPath $reportPath
     [xml]$xml=Get-Content -LiteralPath $output -Raw
     $xml.opnsense.system.root.password | Should -BeExactly '[REDACTED]'
     $xml.opnsense.system.root.otp_seed | Should -BeExactly '[REDACTED]'
@@ -51,7 +51,7 @@ Describe 'Sanitize-OPNsenseConfig.ps1' {
   }
 
   It 'removes created updated and revision audit metadata' {
-    & $sanitizer -InputPath $input -OutputPath $output -ReportPath $reportPath
+    & $sanitizer -InputPath $inputPath -OutputPath $output -ReportPath $reportPath
     [xml]$xml=Get-Content -LiteralPath $output -Raw
     $xml.SelectNodes("//*[local-name()='created']").Count | Should -Be 0
     $xml.SelectNodes("//*[local-name()='updated']").Count | Should -Be 0
@@ -59,7 +59,7 @@ Describe 'Sanitize-OPNsenseConfig.ps1' {
   }
 
   It 'writes a clean report without local fullPath properties' {
-    & $sanitizer -InputPath $input -OutputPath $output -ReportPath $reportPath
+    & $sanitizer -InputPath $inputPath -OutputPath $output -ReportPath $reportPath
     $report=Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
     $report.schemaVersion | Should -BeExactly '1.0.0'
     $report.sanitizerVersion | Should -BeExactly '1.1.0'
