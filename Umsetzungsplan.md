@@ -6,7 +6,7 @@
 > **Projektstand:** `0.3.0`  
 > **Aktuelle fachliche Phase:** Phase 4 – DHCP / Asset Inventory  
 > **CI/CD-Zielplattform:** Azure DevOps über die bestehende DevOps-Bootstrap-Struktur  
-> **CI-Status:** Phase 1–3 auf Azure Pipelines erfolgreich verifiziert (Windows PowerShell 5.1, PowerShell 7, Schema, Parser Ubuntu/Windows)  
+> **CI-Status:** Phase 1–3 sowie Phase 4.1/4.2 auf Azure Pipelines erfolgreich verifiziert; Phase 4.3 implementiert und nach Active/Active-Korrektur erneut CI-zu-verifizieren  
 > **Grundsatz:** Technische Fakten werden nicht durch ein LLM erfunden oder frei interpretiert. Parser, Regeln, Korrelation, Validierung, Diagramme und Dokumentstruktur müssen deterministisch sein.
 
 ---
@@ -346,18 +346,41 @@ Legacy Facts
 Authoritative Service Resolution
 ```
 
-## 6.2 Authoritative Resolution erfolgt pro Interface
+## 6.2 Authoritative Resolution erfolgt pro Interface / IP-Familie
 
-Beispiel:
+`enabled` beschreibt zunächst den aus der `config.xml` belegten konfigurierten Sollzustand. Daraus darf bei konkurrierenden DHCP-Implementierungen kein tatsächlicher Runtime-Zustand erfunden werden.
+
+Verbindliche Regel:
+
+```text
+0 configured-enabled DHCP Services
+→ keiner authoritative
+
+1 configured-enabled DHCP Service
+→ genau dieser authoritative
+
+2 oder mehr configured-enabled DHCP Services
+auf demselben Interface / derselben IP-Familie
+→ harter Konfigurationskonflikt
+→ Runtime-Zustand aus config.xml nicht beweisbar
+→ BUILD FAILED
+```
+
+Der normale Kea-Migrationsfall bleibt eindeutig:
 
 ```text
 Kea DHCPv4 enabled
 AND
 LAN ist Kea zugewiesen
+AND
+Legacy-LAN-Block besitzt keinen aktiven <enable>-Marker
 → Kea authoritative für LAN/IPv4
+→ Legacy LAN retained
+→ Legacy enabled=false
+→ Legacy authoritative=false
 ```
 
-Eine vorhandene Legacy-LAN-Konfiguration bleibt erhalten, wird aber als `legacy=true`, `authoritative=false` dokumentiert.
+Eine vorhandene Legacy-Konfiguration wird also nicht gelöscht. **Kea besitzt jedoch keinen erfundenen Vorrang gegenüber einem ebenfalls aktiv konfigurierten ISC-DHCP-Service auf demselben Interface.** Sind beide konfiguriert aktiviert, wird der Build abgebrochen.
 
 ## 6.3 Kritische Regression
 
@@ -367,9 +390,23 @@ Der bereits aufgetretene Fehler darf niemals zurückkehren:
 Legacy Pool: 192.168.1.10 - 192.168.1.245
 Kea Pool:    192.168.1.50 - 192.168.1.199
 Kea enabled auf LAN
+Legacy-Block vorhanden, aber ohne aktiven enable-Marker
 
 EXPECTED:
 Authoritative Pool = Kea .50 - .199
+Legacy bleibt dokumentiert, aber non-authoritative
+```
+
+Zusätzliche Konfliktregression:
+
+```text
+Kea enabled auf LAN
++
+ISC DHCP enabled auf LAN
+
+EXPECTED:
+kein Vorrang wird geraten
+ParserError / BUILD FAILED
 ```
 
 ## 6.4 DHCP Scope
@@ -463,6 +500,7 @@ Beispiele:
 - DHCP Pool außerhalb des Subnetzes
 - Pool Start > Pool End
 - gleiche Reservation-IP mit unterschiedlichen MACs im gleichen Scope
+- mehrere `configured-enabled` DHCP-Implementierungen auf demselben Interface / derselben IP-Familie
 - nicht eindeutige authoritative DHCP-Resolution
 - nicht auflösbare Pflichtreferenz, sofern sie für einen belastbaren Build zwingend erforderlich ist
 
@@ -479,7 +517,7 @@ Technisch mögliche, aber prüfenswerte Situationen dürfen das Modell erhalten.
 Beispiele:
 
 - gleicher Hostname auf mehreren MACs
-- Legacy-Konfiguration parallel zu einer eindeutig aktiven Implementierung
+- Legacy-Konfiguration parallel zu einer eindeutig aktiven Implementierung, sofern die Legacy-Konfiguration selbst deaktiviert ist
 - Reservation außerhalb des dynamischen Pools, aber innerhalb des Subnetzes
 
 ## 8.3 Keine Fehlklassifikation
@@ -779,19 +817,31 @@ Fixtures:
 legacy-only.xml
 kea-only.xml
 kea-and-legacy.xml
+kea-and-legacy-both-enabled.xml
 kea-reservations.xml
 duplicate-ip.xml
 invalid-pool.xml
 reservation-outside-pool.xml
 asset-enrichment.xml
+mixed-interface-authority.xml
+pool-outside-subnet.xml
 ```
 
 Kritischer Golden Test:
 
 ```text
-Kea + Legacy
+Kea enabled + Legacy-Konfiguration vorhanden, Legacy disabled
 → Kea authoritative
 → Legacy retained but non-authoritative
+→ exakter Golden Contract
+```
+
+Conflict Regression:
+
+```text
+Kea enabled + ISC enabled auf demselben Interface/IP-Familie
+→ keine erfundene Priorität
+→ ParserError / BUILD FAILED
 ```
 
 ## 17.5 Diagram / Dokument
@@ -849,6 +899,8 @@ Die Azure-Pipelines-Migrationsbaseline unter `/pipelines/azure-pipelines.yml` is
 - Canonical Model Schema
 - Core Parser / Ubuntu / Python 3.12
 - Core Parser / Windows / Python 3.12
+
+Phase 4.1 und Phase 4.2 wurden ebenfalls auf den vorhandenen Windows-/Linux-Parserjobs erfolgreich verifiziert. Phase 4.3 nutzt dieselbe Cross-Platform-CI und wird nach der Active/Active-Korrektur erneut verifiziert.
 
 Die vorhandenen GitHub-Actions-Workflows bleiben vorerst als Migrations-/Vergleichsartefakte erhalten. Sie sind nicht mehr die operative CI/CD-Source-of-Truth und werden erst nach Abschluss der noch offenen Repository-/Policy-Aufräumarbeiten entfernt bzw. archiviert.
 
@@ -919,6 +971,7 @@ Ohne weitere Collector-/Metadatenquellen nicht raten:
 - Provider / Vertragsdaten
 - Standort / Rack / Seriennummer, sofern nicht separat erfasst
 - vollständige Azure UDR / NSG / Gateway-Konfiguration
+- tatsächlicher Runtime-DHCP-Dienst bei mehreren gleichzeitig konfiguriert aktivierten DHCP-Implementierungen auf demselben Interface/IP-Familie
 
 ---
 
@@ -1182,34 +1235,54 @@ Die Ausgabe ist schema-valide.
 
 ## Phase 4 – DHCP / Asset Inventory
 
-**Status: nächster fachlicher Implementierungsschritt.**
+**Status: Phase 4.1 und 4.2 implementiert und Azure-CI verifiziert. Phase 4.3 implementiert; CI-Verifikation nach Active/Active-Korrektur ausstehend.**
 
 ### 4.1 Testbasis
 
-- [ ] `legacy-only.xml`
-- [ ] `kea-only.xml`
-- [ ] `kea-and-legacy.xml`
-- [ ] `kea-reservations.xml`
-- [ ] `duplicate-ip.xml`
-- [ ] `invalid-pool.xml`
-- [ ] `reservation-outside-pool.xml`
-- [ ] `asset-enrichment.xml`
-- [ ] Golden Expected Output für Kea+Legacy
+- [x] `legacy-only.xml`
+- [x] `kea-only.xml`
+- [x] `kea-and-legacy.xml`
+- [x] `kea-and-legacy-both-enabled.xml`
+- [x] `kea-reservations.xml`
+- [x] `duplicate-ip.xml`
+- [x] `invalid-pool.xml`
+- [x] `reservation-outside-pool.xml`
+- [x] `asset-enrichment.xml`
+- [x] `mixed-interface-authority.xml`
+- [x] `pool-outside-subnet.xml`
+- [x] Golden Expected Output für Kea+Legacy
+
+**Verifikation:**
+
+- [x] Fixture-/Golden-Contract-Tests auf Azure Ubuntu erfolgreich
+- [x] Fixture-/Golden-Contract-Tests auf Azure Windows erfolgreich
 
 ### 4.2 DHCP Parser
 
-- [ ] Kea DHCPv4 Parser
-- [ ] Legacy DHCP Parser
-- [ ] Services
-- [ ] Scopes
-- [ ] Reservations
+- [x] Kea DHCPv4 Parser
+- [x] Legacy DHCP Parser
+- [x] Services
+- [x] Scopes
+- [x] Reservations
+
+**Verifikation:**
+
+- [x] DHCP-Fact-Parser auf Azure Ubuntu erfolgreich
+- [x] DHCP-Fact-Parser auf Azure Windows erfolgreich
 
 ### 4.3 Authoritative Service Resolution
 
-- [ ] Resolution pro Interface / IP-Familie
-- [ ] Kea authoritative, wenn enabled und Interface zugewiesen
-- [ ] Legacy parallel erhalten, aber non-authoritative
-- [ ] uneindeutige Situation als harter Validierungsfehler behandeln
+- [x] Resolution pro Interface / IP-Familie
+- [x] genau ein configured-enabled Service pro Interface/IP-Familie wird authoritative
+- [x] deaktivierte Legacy-Konfiguration parallel zu Kea erhalten, aber non-authoritative
+- [x] Kea + ISC beide enabled auf demselben Interface/IP-Familie als harter Konfigurationsfehler behandeln
+- [x] tatsächlichen Runtime-Dienst bei Active/Active nicht aus `config.xml` erfinden
+- [x] exakten Kea+Legacy-Golden-Contract gegen den Resolver prüfen
+
+**Verifikation:**
+
+- [ ] korrigierte Phase-4.3-Resolution auf Azure Ubuntu erfolgreich
+- [ ] korrigierte Phase-4.3-Resolution auf Azure Windows erfolgreich
 
 ### 4.4 Asset Builder
 
@@ -1240,11 +1313,22 @@ Die Ausgabe ist schema-valide.
 ### Kritischer Regression Test
 
 ```text
-Kea + Legacy auf LAN
+Kea enabled auf LAN
+Legacy-LAN-Konfiguration vorhanden, aber disabled
 → Kea authoritative
 → Kea Pool wird als produktiv dokumentiert
 → Legacy Pool bleibt als Legacy erhalten
 → Legacy darf niemals den produktiven Pool überschreiben
+```
+
+### Conflict Regression
+
+```text
+Kea enabled auf LAN
+ISC DHCP enabled auf LAN
+→ kein Kea-Vorrang wird angenommen
+→ tatsächlicher Runtime-Dienst ist aus config.xml nicht beweisbar
+→ BUILD FAILED
 ```
 
 ### Definition of Done Phase 4
@@ -1381,7 +1465,7 @@ Der Azure-DevOps-Build erzeugt dieselben deterministischen Modell-/Dokumentation
 GitHub ist nach erfolgreichem Cutover nicht mehr die operative Source of Truth.
 ```
 
-**Aktueller Teilstatus:** Die Component-CI für Phase 1–3 ist auf Azure DevOps verifiziert. Die vollständige produktive Kunden-/Dokumentationsautomation sowie zentrale Template-/Policy-Anbindung bleiben Phase 12 und sind noch offen.
+**Aktueller Teilstatus:** Die Component-CI für Phase 1–3 sowie die Phase-4.1/4.2-Regressionsbasis ist auf Azure DevOps verifiziert. Die vollständige produktive Kunden-/Dokumentationsautomation sowie zentrale Template-/Policy-Anbindung bleiben Phase 12 und sind noch offen.
 
 ---
 
@@ -1396,7 +1480,11 @@ Der Plattform-Cutover der Component-CI ist abgeschlossen. Der weitere fachliche 
 4. Sanitizer-/Schema-/Parser-Tests in Azure Pipelines abbilden ✅
 5. deterministische Regressionen auf Azure DevOps verifizieren ✅
 6. Azure DevOps als operative CI/CD-Source-of-Truth festlegen  ✅
-7. Phase 4 – DHCP / Asset Inventory implementieren             ← NÄCHSTER SCHRITT
+7. Phase 4.1 – DHCP Contract / Testbasis                       ✅
+8. Phase 4.2 – DHCP Fact Parser                                ✅
+9. Phase 4.3 – Authority Resolution implementieren             ✅
+10. Phase 4.3 – korrigierte Active/Active-Regel in Azure CI    ← NÄCHSTER SCHRITT
+11. Phase 4.4 – Asset Builder                                  danach
 ```
 
 Die vollständige produktive Automatisierung bleibt Phase 12. Zentrale Pipeline-Templates, Build Policies und die spätere Kundenpipeline werden nicht vorgezogen, solange sie für die aktuelle fachliche Phase nicht benötigt werden.
