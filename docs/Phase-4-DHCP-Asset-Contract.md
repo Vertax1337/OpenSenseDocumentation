@@ -2,13 +2,13 @@
 
 ## Status
 
-Phase 4.1 definiert den verbindlichen DHCP-/Asset-Vertrag und die synthetische Regressionstestbasis. Phase 4.1 und Phase 4.2 sind implementiert und auf Azure Pipelines für Windows und Linux verifiziert. Phase 4.3 implementiert die Authoritative-Service-Resolution; nach der fachlichen Korrektur der Active/Active-Konfliktlogik steht hierfür die erneute Azure-CI-Verifikation noch aus.
+Phase 4.1 bis Phase 4.4 sind implementiert und auf Azure Pipelines für Windows und Linux verifiziert.
 
-Der bestehende Canonical-Model-Contract `1.0.0` bleibt für diesen Schritt unverändert. Es ist aktuell keine Schema-Erweiterung erforderlich.
+Phase 4.5 erweitert den bereits verifizierten Asset Builder um deterministisches OUI-Enrichment sowie versionierte Device-Type-/Model-Inference. Die technische Implementierung wird mit synthetischen, lokal versionierten Fixtures abgesichert. Ein produktiver IEEE-MA-L-Snapshot unter `data/oui/` wird getrennt vom normalen Build gepflegt und ist noch zu provisionieren; bis dahin bleibt `vendor=UNKNOWN`.
+
+Der bestehende Canonical-Model-Contract `1.0.0` bleibt unverändert. Die vorhandenen `attributedString`-Felder können `CONFIRMED`, `DERIVED`, `INFERRED` und `UNKNOWN` bereits ausdrücken.
 
 ## Architekturgrenze
-
-Phase 4 bleibt in die bereits beschlossene Verarbeitungskette eingebettet:
 
 ```text
 Sanitized OPNsense XML
@@ -29,15 +29,11 @@ Enrich
 Validate
 ```
 
-Der Parser darf weder aktive DHCP-Implementierungen noch Gerätetypen aus Wahrscheinlichkeiten bestimmen. Unklare Zuordnungen werden nicht geraten.
+Der Parser darf weder aktive DHCP-Implementierungen noch Vendor, Device Type oder Model aus Wahrscheinlichkeiten bestimmen. Nicht eindeutig belegbare Werte bleiben `UNKNOWN`.
 
 ## Source-Struktur
 
-Die Phase-4-Fixtures orientieren sich an der strukturellen Form eines sanitisierten OPNsense-Exports. Kundenspezifische Werte werden nicht übernommen.
-
 ### Kea DHCPv4
-
-Kea DHCPv4 wird unter folgendem Pfad erwartet:
 
 ```text
 /opnsense/OPNsense/Kea/dhcp4
@@ -64,23 +60,19 @@ reservations/reservation/description
 
 ### Legacy DHCP
 
-Legacy DHCP wird unter folgendem Pfad erwartet:
-
 ```text
 /opnsense/dhcpd/<interface>
 ```
 
-Ein vorhandener Legacy-Block ist zunächst ein Konfigurations-Fact. Für Phase 4 gilt ein Legacy-Service nur dann als `enabled`, wenn der jeweilige Interface-Block einen aktiv ausgewerteten `enable`-Marker besitzt. Ein vorhandener Block ohne Enable-Marker bleibt erhalten, wird aber nicht als aktiver Dienst interpretiert.
+Ein vorhandener Legacy-Block ist zunächst ein Konfigurations-Fact. Ein Legacy-Service gilt nur dann als `enabled`, wenn der jeweilige Interface-Block einen aktiv ausgewerteten `enable`-Marker besitzt. Ein vorhandener Block ohne Enable-Marker bleibt erhalten, wird aber nicht als aktiver Dienst interpretiert.
 
 ## Service-Kardinalität
 
-Obwohl `dhcpServiceRecord.interfaceRefs` im Schema ein Array ist, emittiert Phase 4 für IPv4 genau einen Service-Record pro Kombination aus:
+Phase 4 emittiert für IPv4 genau einen Service-Record pro Kombination aus:
 
 ```text
 DHCP implementation + interface + IP family
 ```
-
-Damit enthält `interfaceRefs` bei durch Phase 4 erzeugten Records genau einen Eintrag.
 
 Beispiele:
 
@@ -90,41 +82,41 @@ dhcp-service:isc-dhcpd-ipv4-lan
 dhcp-service:isc-dhcpd-ipv4-opt4
 ```
 
-Diese Kardinalitätsregel ermöglicht eine eindeutige Authoritative-Service-Resolution pro Interface ohne Änderung des bestehenden Schema-Shape.
+`interfaceRefs` enthält bei diesen Records genau einen Eintrag.
 
 ## Authoritative Service Resolution
 
-Die endgültige Eigenschaft `authoritative` ist kein frei interpretierter Source-Wert. Sie wird deterministisch durch das versionierte Regelwerk `dhcp.authority.v1` bestimmt.
+`authoritative` wird deterministisch durch `dhcp.authority.v1` bestimmt.
 
-Wichtig ist die Trennung zwischen **konfiguriert aktiviert** und **zur Laufzeit tatsächlich erfolgreich verfügbar**. Die `config.xml` belegt den konfigurierten Sollzustand. Sie belegt nicht, welcher Dienst bei einem Socket-/Port-Konflikt tatsächlich erfolgreich auf einem Interface lauscht.
+`enabled` beschreibt den aus `config.xml` belegten konfigurierten Sollzustand. Daraus darf bei konkurrierenden DHCP-Implementierungen kein tatsächlicher Runtime-Zustand erfunden werden.
 
-Für IPv4 gilt deshalb:
+Für IPv4 gilt:
 
-1. Kea ist auf einem Interface nur dann als `enabled` konfiguriert, wenn `general/enabled` aktiv ist und das Interface explizit in `general/interfaces` aufgeführt wird.
-2. Legacy ISC DHCP ist auf einem Interface nur dann als `enabled` konfiguriert, wenn der jeweilige `dhcpd/<interface>`-Block einen aktiven `enable`-Marker besitzt.
-3. Existiert für ein Interface und eine IP-Familie **genau ein** konfiguriert aktivierter DHCP-Service, ist genau dieser Service `authoritative=true`.
-4. Ist Kea auf LAN aktiviert und ein Legacy-LAN-Block nur noch strukturell vorhanden, aber ohne `enable`, bleibt Legacy erhalten und wird `enabled=false`, `authoritative=false`.
-5. Ist ausschließlich Legacy auf einem Interface aktiviert, ist Legacy dort authoritative.
-6. Sind auf demselben Interface und derselben IP-Familie **zwei oder mehr DHCP-Implementierungen konfiguriert aktiviert**, wird keine Priorität angenommen. Dies ist ein harter Konfigurationskonflikt und führt zum Build-Abbruch.
-7. Der Build darf aus einer solchen Active/Active-Konfiguration insbesondere nicht ableiten, dass Kea vor ISC „gewinnt“. Der tatsächliche Runtime-Zustand ist aus `config.xml` allein nicht belastbar beweisbar.
-8. Deaktivierte bzw. nur noch strukturell vorhandene DHCP-Blöcke sind niemals authoritative.
+1. Kea ist auf einem Interface nur dann `enabled`, wenn `general/enabled` aktiv ist und das Interface explizit in `general/interfaces` aufgeführt ist.
+2. Legacy ISC DHCP ist nur dann `enabled`, wenn `dhcpd/<interface>` einen aktiven `enable`-Marker besitzt.
+3. Genau ein konfiguriert aktivierter Service pro Interface/IP-Familie wird `authoritative=true`.
+4. Kea enabled + vorhandener Legacy-Block ohne `enable` → Kea authoritative, Legacy retained/disabled/non-authoritative.
+5. Ausschließlich Legacy enabled → Legacy authoritative.
+6. Zwei oder mehr configured-enabled DHCP-Services auf demselben Interface/IP-Familie → harter Konfigurationskonflikt / Build-Abbruch.
+7. Es existiert kein erfundener Kea-Vorrang vor einem ebenfalls enabled ISC-Service.
+8. Deaktivierte oder nur strukturell vorhandene DHCP-Blöcke sind niemals authoritative.
 
-Service-Records nach erfolgreicher Resolution sind `DERIVED`, weil `authoritative` aus Source-Facts und einer versionierten Regel entsteht. Die ursprüngliche Source-Evidence bleibt erhalten.
+Service-Records nach der Resolution sind `DERIVED` und behalten ihre Source-Evidence.
 
 ## Scope-Zuordnung
 
 ### Legacy
 
-Der Legacy-Scope ist strukturell an seinen Container gebunden:
+Der Scope ist strukturell an seinen Container gebunden:
 
 ```text
-/opnsense/dhcpd/lan     -> interface:lan
-/opnsense/dhcpd/opt4    -> interface:opt4
+/opnsense/dhcpd/lan  -> interface:lan
+/opnsense/dhcpd/opt4 -> interface:opt4
 ```
 
 ### Kea
 
-Ein Kea-Subnetz enthält nicht zwingend selbst einen logischen OPNsense-Interface-Namen. Die Zuordnung wird ausschließlich dann erzeugt, wenn das Subnetz genau einem IPv4-Netz eines von Kea zugewiesenen Interfaces entspricht.
+Eine Kea-Subnetz-Zuordnung wird nur erzeugt, wenn das Subnetz genau einem IPv4-Netz eines von Kea zugewiesenen Interfaces entspricht:
 
 ```text
 Kea assigned interfaces
@@ -137,24 +129,22 @@ parsed interface networks
 exactly one match -> deterministic interfaceRef
 ```
 
-Kein Match oder mehrere Matches werden nicht durch Namen oder Reihenfolge aufgelöst. Diese Fälle werden als unresolved/validation-relevant erhalten.
+Kein Match oder mehrere Matches werden nicht über Namen oder Reihenfolge geraten.
 
-Scope-Records mit deterministisch abgeleiteter Interface-Zuordnung sind `DERIVED` mit Regel `dhcp.scope-interface.v1`.
+Scope-Records mit abgeleiteter Interface-Zuordnung sind `DERIVED` mit `dhcp.scope-interface.v1`.
 
 ## Pools
 
-Phase 4 behandelt den Pool als IPv4-Range mit `start` und `end`.
+Verbindliche Validierungen für Phase 4.6:
 
-Verbindliche Validierungen:
-
-- Start und Ende müssen gültige IPv4-Adressen sein.
+- Start und Ende sind gültige IPv4-Adressen.
 - `start <= end`.
-- beide Grenzen müssen innerhalb des Scope-Subnetzes liegen.
+- beide Grenzen liegen innerhalb des Scope-Subnetzes.
 - eine Reservation darf außerhalb des dynamischen Pools liegen, solange sie innerhalb des Scope-Subnetzes liegt.
 
 ## Reservations
 
-Kea-Reservations referenzieren ihren Scope explizit über den Wert in `reservation/subnet`, der auf die UUID eines `subnet4`-Records zeigt.
+Kea-Reservations referenzieren ihren Scope über `reservation/subnet` auf die UUID eines `subnet4`-Records.
 
 Der Reservation-Parser übernimmt ausschließlich Source-Facts:
 
@@ -168,102 +158,237 @@ Der Reservation-Parser übernimmt ausschließlich Source-Facts:
 
 Der Reservation-Parser leitet weder Vendor noch Device Type noch Model ab.
 
-Reservations bleiben `CONFIRMED`, sofern ihre Source- und Scope-Beziehung explizit aus der Konfiguration belegt ist.
+Reservations bleiben `CONFIRMED`, sofern Source- und Scope-Beziehung explizit belegt sind.
 
-## Asset Builder
+## Asset Builder – Phase 4.4
 
-Der Asset Builder wird erst in Phase 4.4 implementiert. Verbindliche Identitätsregel:
+Phase 4.4 ist implementiert und auf Azure Pipelines für Windows und Linux verifiziert.
+
+Identitätsregel:
 
 ```text
 MAC vorhanden
+-> MAC normalisieren
 -> normalisierte MAC als bevorzugte Identitätsbasis
 
 keine MAC
 -> deterministische Reservation-/Scope-/IP-Identity-Tuple
 ```
 
-Vendor, Device Type und Model werden getrennt attribuiert. `UNKNOWN` ist ein zulässiger Endzustand.
+Weitere Regeln:
+
+- mehrere Reservations derselben normalisierten MAC werden zu einem Asset zusammengeführt
+- IP-Adressen, Hostnames, Evidence und `sourceReservationRefs` werden deterministisch sortiert
+- widersprüchliche Descriptions werden nicht geraten; `description=null`
+- ungültige nichtleere MAC-Adressen führen zum harten Parserfehler
+- Vendor, Device Type und Model bleiben vor Enrichment explizit `UNKNOWN`
+
+## OUI Enrichment – Phase 4.5
+
+### Kein Live-Lookup im normalen Build
+
+Ein normaler Dokumentationsbuild verwendet keine externe OUI-API und lädt keine Registrierungsdaten aus dem Internet.
+
+Der produktive Vertrag lautet:
+
+```text
+downloaded IEEE MA-L CSV
+        │
+        ▼
+tools/update_oui_database.py
+        │
+        ├─ UTF-8 / LF normalisieren
+        ├─ MA-L-Assignments deterministisch sortieren
+        ├─ Snapshot SHA-256 berechnen
+        └─ manifest.json erzeugen
+        │
+        ▼
+data/oui/
+├── oui-<version>.csv
+└── manifest.json
+        │
+        ▼
+normal build: read-only
+```
+
+Der Snapshot-Update ist ein kontrollierter Wartungsschritt außerhalb des normalen Dokumentbuilds.
+
+### Manifest-/Hash-Vertrag
+
+`manifest.json` enthält mindestens:
+
+```text
+schemaVersion
+databaseVersion
+registry = MA-L
+file
+sha256
+entryCount
+source.name
+source.url
+source.sourceSha256
+```
+
+Vor jeder Nutzung wird die SHA-256 des lokalen Snapshots gegen das Manifest geprüft. Abweichungen führen zum harten Fehler.
+
+### Vendor-Attribution
+
+Regel-ID:
+
+```text
+asset.vendor-oui.v1
+```
+
+Vendor wird nur `DERIVED`, wenn:
+
+1. mindestens eine normalisierte Asset-MAC vorhanden ist,
+2. die MAC ein globally administered unicast address ist,
+3. der 24-Bit-MA-L-Prefix genau einem Eintrag des versionierten lokalen Snapshots entspricht,
+4. alle verwertbaren Vendor-Matches desselben Assets denselben Organization-Namen liefern.
+
+Andernfalls bleibt Vendor `UNKNOWN`.
+
+Insbesondere werden **keine** Vendor-Werte aus lokal administrierten/randomisierten MAC-Adressen abgeleitet. Gruppen-/Multicast-Adressen, Broadcast, Null-MACs und unbekannte Prefixes bleiben ebenfalls `UNKNOWN`.
+
+Die OUI-Evidence verwendet:
+
+```text
+sourceType = oui-database
+sourceId   = <databaseVersion>:<snapshot-file>
+path       = assignment:<MA-L-prefix>
+sourceSha256 = <snapshot SHA-256>
+```
+
+## Confidence / Device-Type / Model Inference – Phase 4.5
+
+Die bestehende Modellklassifikation ist zugleich der verbindliche Confidence-Vertrag:
+
+```text
+Vendor      via versioniertem OUI Match -> DERIVED
+Device Type via versionierter Regel     -> INFERRED
+Model       via versionierter Regel     -> INFERRED
+kein belastbarer Match                  -> UNKNOWN
+```
+
+Es wird kein zusätzliches unversioniertes Confidence-Feld eingeführt.
+
+Produktive Inference-Regeln liegen versioniert unter:
+
+```text
+data/rules/asset-inference.json
+```
+
+Der Vertrag enthält:
+
+```text
+schemaVersion
+rulesetVersion
+rules[]
+```
+
+Eine Regel enthält:
+
+```text
+id
+target       = deviceType | model
+sourceField  = hostnames | description | vendor
+pattern      = regulärer Ausdruck
+value        = deterministischer Zielwert
+```
+
+Regeln werden case-insensitive ausgewertet und deterministisch nach Rule-ID sortiert.
+
+Mehrere Regeln dürfen denselben Zielwert bestätigen. Treffen jedoch Regeln mit unterschiedlichen Zielwerten auf dasselbe Asset zu, wird **keine Priorität geraten**; der Wert bleibt `UNKNOWN`.
+
+Der initiale produktive Rule-Katalog ist absichtlich leer. Fachliche Inference-Regeln werden erst nach expliziter Freigabe ergänzt und erfordern Rule-ID/Ruleset-Version sowie Regressionstests. Die synthetischen Tests verwenden einen separaten versionierten Test-Ruleset, um die Engine einschließlich Konfliktverhalten zu prüfen.
 
 ## Synthetische Fixtures
 
-Die Testbasis liegt unter:
+DHCP-/Asset-Fixtures:
 
 ```text
 tests/Fixtures/Parser/DHCP/
 ```
 
-| Fixture | Zweck |
-|---|---|
-| `legacy-only.xml` | aktiver Legacy-DHCP als alleinige Implementierung |
-| `kea-only.xml` | aktiver Kea-DHCP als alleinige Implementierung |
-| `kea-and-legacy.xml` | kritische Regression: Kea aktiv auf LAN, Legacy-Konfiguration vorhanden aber deaktiviert |
-| `kea-and-legacy-both-enabled.xml` | harter Konflikt: Kea und Legacy auf demselben Interface beide konfiguriert aktiviert |
-| `kea-reservations.xml` | Kea-Reservation-Shape und explizite Subnet-Referenzen |
-| `duplicate-ip.xml` | gleiche Reservation-IP mit unterschiedlichen MACs |
-| `invalid-pool.xml` | Pool Start größer Pool Ende |
-| `reservation-outside-pool.xml` | zulässige Reservation außerhalb des dynamischen Pools, aber innerhalb des Subnetzes |
-| `asset-enrichment.xml` | synthetische Asset-Basis ohne echte Kundendaten |
-| `mixed-interface-authority.xml` | Kea aktiv auf LAN, Legacy LAN deaktiviert, Legacy auf anderem Interface aktiv; Resolution muss pro Interface erfolgen |
-| `pool-outside-subnet.xml` | Pool liegt außerhalb des Scope-Subnetzes |
-
-Alle Fixtures verwenden ausschließlich Dokumentationsnetze, synthetische Hostnamen und lokal administrierte Test-MACs.
-
-## Golden Contract
-
-`tests/Expected/DHCP/kea-and-legacy.expected.json` definiert den fachlichen Golden Contract für die kritische Regression.
-
-Erwartung:
+Enrichment-Fixtures:
 
 ```text
-Kea + Legacy-Konfiguration auf LAN
--> Kea enabled=true
--> Kea ist der einzige enabled Service
--> Kea authoritative=true
--> Legacy LAN retained
--> Legacy LAN enabled=false
--> Legacy LAN authoritative=false
--> Kea Pool ist der produktiv relevante Pool
--> Legacy Pool überschreibt den Kea Pool niemals
+tests/Fixtures/Enrichment/OUI/
+├── oui-test.csv
+└── manifest.json
+
+tests/Fixtures/Enrichment/Rules/
+└── asset-inference-test.json
 ```
 
-Der separate Conflict-Contract lautet:
+Die Enrichment-Fixtures sind vollständig synthetisch. Der OUI-Testdatensatz ist nur ein IEEE-formatiger Testvertrag und keine produktive Herstellerdatenbank.
+
+## Kritische Regressionen
+
+### Kea + deaktiviertes Legacy
+
+```text
+Kea enabled auf LAN
+Legacy-LAN-Konfiguration vorhanden, aber disabled
+-> Kea authoritative
+-> Legacy retained but non-authoritative
+-> Kea Pool bleibt produktiv relevant
+```
+
+### Active/Active DHCP
 
 ```text
 Kea enabled auf LAN
 +
-Legacy ISC enabled auf LAN
--> kein erfundener Vorrang
--> Runtime-Zustand aus config.xml nicht beweisbar
+ISC DHCP enabled auf LAN
+-> keine erfundene Priorität
 -> ParserError / BUILD FAILED
 ```
 
-Der Golden Contract ist ein fokussierter `dhcpModel`-Contract und kein vollständiges `infrastructure-model.json`.
+### OUI / Inference
+
+```text
+globally administered MAC + exakter lokaler OUI Match
+-> Vendor DERIVED
+
+locally administered/randomized MAC
+-> Vendor UNKNOWN
+
+kein OUI Match
+-> Vendor UNKNOWN
+
+genau eine versionierte Inference liefert einen Wert
+-> Device Type / Model INFERRED
+
+mehrere widersprüchliche Inference-Werte
+-> UNKNOWN
+```
 
 ## Schema-Preflight
 
-Der vorhandene Schema-Vertrag `schemas/dhcp-assets.schema.json` kann die für Phase 4 benötigten Objekte bereits ausdrücken:
+`schemas/dhcp-assets.schema.json` kann Phase 4.5 ohne Schemaänderung ausdrücken:
 
-- DHCP Services
-- Scopes
-- Pools
-- Reservations
-- Assets
-- Attribution für Vendor / Device Type / Model
+- Asset Records
+- Vendor / Device Type / Model als `attributedString`
+- Evidence
+- Derivation
+- `UNKNOWN`
 
-Die pro-Interface-Semantik wird über die oben definierte Record-Kardinalität hergestellt. Deshalb ist für die aktuelle Phase keine Änderung an Schema-Version `1.0.0` erforderlich.
-
-Eine spätere Schemaänderung ist nur zulässig, wenn eine konkrete Parser-/Validierungsanforderung mit dem bestehenden Vertrag nicht ausdrückbar ist. In diesem Fall gilt weiterhin: Schema und Fixtures zuerst, Parser danach.
+Schema-Version `1.0.0` bleibt bestehen.
 
 ## Verifikationsstand
 
-- Phase 4.1 Testbasis: implementiert und Azure-CI auf Windows/Linux verifiziert.
-- Phase 4.2 Kea-/Legacy-DHCP-Fact-Parser: implementiert und Azure-CI auf Windows/Linux verifiziert.
-- Phase 4.3 Authoritative Service Resolution: implementiert; Active/Active-Konfliktregel fachlich korrigiert; erneute Azure-CI-Verifikation ausstehend.
+- Phase 4.1 Testbasis: implementiert und Azure-CI Windows/Linux verifiziert.
+- Phase 4.2 DHCP Fact Parser: implementiert und Azure-CI Windows/Linux verifiziert.
+- Phase 4.3 Authoritative Service Resolution: implementiert und Azure-CI Windows/Linux verifiziert.
+- Phase 4.4 Asset Builder: implementiert und Azure-CI Windows/Linux verifiziert.
+- Phase 4.5 OUI-/Inference-Engine: Implementierung und synthetische Regressionen vorbereitet; Azure-CI-Verifikation ausstehend.
+- Produktiver IEEE-MA-L-Snapshot: noch nicht provisioniert; ohne Snapshot bleibt Vendor deterministisch `UNKNOWN`.
 
 ## Noch offen
 
-- Phase 4.3 nach der Active/Active-Korrektur auf Windows/Linux CI-verifizieren
-- Phase 4.4: Asset Builder
-- Phase 4.5: versioniertes OUI-Enrichment und Inference-Regeln
-- Phase 4.6: Conflict Validation für Pool-/Reservation-/Asset-Konflikte
+- Phase 4.5 Parser-/Enrichment-Regressionen auf Azure Ubuntu und Windows verifizieren
+- produktiven IEEE-MA-L-Snapshot über `tools/update_oui_database.py` erzeugen und versioniert committen
+- fachlich freigegebene produktive Device-Type-/Model-Regeln bei Bedarf ergänzen
+- Phase 4.6 Conflict Validation für Pool-/Reservation-/Asset-Konflikte
 - Proof-of-Concept-Gegenprüfung mit realer sanitisierter Konfiguration außerhalb des öffentlichen Tooling-Repositories

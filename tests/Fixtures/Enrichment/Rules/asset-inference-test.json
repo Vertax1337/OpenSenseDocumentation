@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.0.0",
+  "rulesetVersion": "test-1.0.0",
+  "rules": [
+    {
+      "id": "asset.device-type.conflict-printer.v1",
+      "target": "deviceType",
+      "sourceField": "hostnames",
+      "pattern": "(^|[-_.])conflict-device($|[-_.])",
+      "value": "Printer"
+    },
+    {
+      "id": "asset.device-type.conflict-server.v1",
+      "target": "deviceType",
+      "sourceField": "hostnames",
+      "pattern": "(^|[-_.])conflict-device($|[-_.])",
+      "value": "Server"
+    },
+    {
+      "id": "asset.device-type.printer.v1",
+      "target": "deviceType",
+      "sourceField": "hostnames",
+      "pattern": "(^|[-_.])printer($|[-_.])",
+      "value": "Printer"
+    },
+    {
+      "id": "asset.model.x100.v1",
+      "target": "model",
+      "sourceField": "hostnames",
+      "pattern": "(^|[-_.])model[-_.]?x100($|[-_.])",
+      "value": "X100"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0.0",
+  "databaseVersion": "test-2026-08",
+  "registry": "MA-L",
+  "file": "oui-test.csv",
+  "sha256": "BC8F171C0FE8DE9FCD00CF014C27CB5DACC50773AB2BAE004E0CE99719D1E9D3",
+  "entryCount": 3,
+  "source": {
+    "name": "Synthetic IEEE-format OUI fixture",
+    "url": null,
+    "sourceSha256": null
+  }
+}

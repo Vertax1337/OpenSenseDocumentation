@@ -31,11 +31,13 @@ except ImportError:  # direct script/test execution with src/Parser on sys.path
 
 try:
     from Enrichment.Assets.asset_builder import build_assets
+    from Enrichment.Assets.asset_enrichment import enrich_assets
 except ImportError:  # direct script/test execution with src/Parser on sys.path
     assets_path = Path(__file__).resolve().parents[1] / "Enrichment" / "Assets"
     if str(assets_path) not in sys.path:
         sys.path.insert(0, str(assets_path))
     from asset_builder import build_assets
+    from asset_enrichment import enrich_assets
 
 
 def _dns_defaults(root: ET.Element) -> dict[str, Any]:
@@ -59,7 +61,7 @@ def parse_opnsense_config(input_path: str | Path, report_path: str | Path) -> di
     parent_map={child:parent for parent in tree.iter() for child in parent}; source_id=str((report.get("output") or {}).get("fileName") or input_path.name)
     ctx=ParseContext(input_path,report_path,source_sha,source_id,parent_map,{}, {}, {}, {}, [])
     system=parse_system(root,ctx); interfaces,networks=parse_interfaces(root,ctx); vlans=parse_vlans(root,ctx,interfaces); aliases=parse_aliases(root,ctx); gateways=parse_gateways(root,ctx); routes=parse_routes(root,ctx); vpn=parse_ipsec(root,ctx,gateways,interfaces); nat,associations=parse_nat(root,ctx); firewall=parse_firewall(root,ctx,nat,associations)
-    dhcp_facts=parse_dhcp_facts(root,ctx); dhcp=resolve_dhcp_model(dhcp_facts,interfaces,networks); assets=build_assets(dhcp["reservations"])
+    dhcp_facts=parse_dhcp_facts(root,ctx); dhcp=resolve_dhcp_model(dhcp_facts,interfaces,networks); assets=enrich_assets(build_assets(dhcp["reservations"]))
     output_meta,source_meta=report.get("output") or {},report.get("source") or {}
     return {
         "schemaVersion":SCHEMA_VERSION,"modelId":stable_id("model",identity_parts=[source_sha]),
