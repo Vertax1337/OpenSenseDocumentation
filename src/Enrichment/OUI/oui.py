@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -55,19 +56,21 @@ class OuiDatabase:
     file_name: str
     file_sha256: str
     entry_count: int
+    row_count: int
+    ambiguous_assignment_count: int
     source_name: str
     source_url: str | None
-    entries: dict[str, str]
+    entries: dict[str, tuple[str, ...]]
 
     def lookup(self, mac_address: str) -> tuple[str, str] | None:
         if not is_globally_administered_unicast(mac_address):
             return None
         compact = _normalized_mac_compact(mac_address)
         assignment = compact[:6]
-        organization = self.entries.get(assignment)
-        if organization is None:
+        organizations = self.entries.get(assignment)
+        if organizations is None or len(organizations) != 1:
             return None
-        return assignment, organization
+        return assignment, organizations[0]
 
     def evidence(self, assignment: str) -> dict[str, Any]:
         return {
@@ -98,6 +101,9 @@ def load_oui_database(manifest_path: str | Path) -> OuiDatabase:
     file_name = str(manifest.get("file") or "").strip()
     expected_sha = str(manifest.get("sha256") or "").strip().upper()
     entry_count = manifest.get("entryCount")
+    expected_row_count = manifest.get("rowCount")
+    expected_ambiguous_count = manifest.get("ambiguousAssignmentCount")
+    expected_ambiguous_assignments = manifest.get("ambiguousAssignments")
     source = manifest.get("source") or {}
 
     if not database_version:
@@ -108,6 +114,21 @@ def load_oui_database(manifest_path: str | Path) -> OuiDatabase:
         raise ParserError("OUI manifest sha256 must contain exactly 64 hex characters")
     if not isinstance(entry_count, int) or entry_count < 0:
         raise ParserError("OUI manifest entryCount must be a non-negative integer")
+    if expected_row_count is not None and (
+        not isinstance(expected_row_count, int) or expected_row_count < 0
+    ):
+        raise ParserError("OUI manifest rowCount must be a non-negative integer")
+    if expected_ambiguous_count is not None and (
+        not isinstance(expected_ambiguous_count, int)
+        or expected_ambiguous_count < 0
+    ):
+        raise ParserError(
+            "OUI manifest ambiguousAssignmentCount must be a non-negative integer"
+        )
+    if expected_ambiguous_assignments is not None and not isinstance(
+        expected_ambiguous_assignments, list
+    ):
+        raise ParserError("OUI manifest ambiguousAssignments must be an array")
     if manifest.get("registry") != "MA-L":
         raise ParserError("Phase 4.5 OUI database must use registry MA-L")
 
@@ -123,7 +144,8 @@ def load_oui_database(manifest_path: str | Path) -> OuiDatabase:
             f"OUI database SHA-256 mismatch: expected {expected_sha}, got {actual_sha}"
         )
 
-    entries: dict[str, str] = {}
+    organizations_by_assignment: dict[str, set[str]] = defaultdict(set)
+    row_count = 0
     try:
         with database_path.open("r", encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle)
@@ -143,25 +165,54 @@ def load_oui_database(manifest_path: str | Path) -> OuiDatabase:
                     raise ParserError(
                         f"OUI database assignment {assignment} has no organization name"
                     )
-                existing = entries.get(assignment)
-                if existing is not None and existing != organization:
-                    raise ParserError(
-                        f"Conflicting OUI organizations for assignment {assignment}"
-                    )
-                entries[assignment] = organization
+                organizations_by_assignment[assignment].add(organization)
+                row_count += 1
     except UnicodeError as exc:
         raise ParserError(f"OUI database is not valid UTF-8: {database_path}") from exc
+
+    entries = {
+        assignment: tuple(sorted(organizations))
+        for assignment, organizations in organizations_by_assignment.items()
+    }
+    ambiguous_assignments = sorted(
+        assignment
+        for assignment, organizations in entries.items()
+        if len(organizations) > 1
+    )
 
     if len(entries) != entry_count:
         raise ParserError(
             f"OUI manifest entryCount mismatch: expected {entry_count}, got {len(entries)}"
         )
+    if expected_row_count is not None and row_count != expected_row_count:
+        raise ParserError(
+            f"OUI manifest rowCount mismatch: expected {expected_row_count}, got {row_count}"
+        )
+    if (
+        expected_ambiguous_count is not None
+        and len(ambiguous_assignments) != expected_ambiguous_count
+    ):
+        raise ParserError(
+            "OUI manifest ambiguousAssignmentCount mismatch: "
+            f"expected {expected_ambiguous_count}, got {len(ambiguous_assignments)}"
+        )
+    if expected_ambiguous_assignments is not None:
+        normalized_expected = sorted(
+            _normalized_assignment(str(value))
+            for value in expected_ambiguous_assignments
+        )
+        if normalized_expected != ambiguous_assignments:
+            raise ParserError(
+                "OUI manifest ambiguousAssignments do not match the snapshot"
+            )
 
     return OuiDatabase(
         database_version=database_version,
         file_name=file_name,
         file_sha256=actual_sha,
         entry_count=len(entries),
+        row_count=row_count,
+        ambiguous_assignment_count=len(ambiguous_assignments),
         source_name=str(source.get("name") or "IEEE Registration Authority MA-L"),
         source_url=str(source.get("url")).strip() if source.get("url") else None,
         entries=entries,
