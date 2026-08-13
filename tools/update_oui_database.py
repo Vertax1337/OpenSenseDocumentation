@@ -7,8 +7,8 @@ import hashlib
 import io
 import json
 import re
+from collections import defaultdict
 from pathlib import Path
-
 
 DEFAULT_SOURCE_URL = "https://standards-oui.ieee.org/oui/oui.csv"
 
@@ -18,24 +18,21 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def normalize_assignment(value: str) -> str:
-    compact = re.sub(r"[^0-9A-Fa-f]", "", value or "").upper()
-    if len(compact) != 6 or re.fullmatch(r"[0-9A-F]{6}", compact) is None:
+    value = re.sub(r"[^0-9A-Fa-f]", "", value or "").upper()
+    if re.fullmatch(r"[0-9A-F]{6}", value) is None:
         raise ValueError(f"Invalid MA-L assignment: {value!r}")
-    return compact
+    return value
 
 
-def normalize_source(source_path: Path) -> tuple[str, int, str]:
+def normalize_source(source_path: Path) -> tuple[str, int, int, list[str], str]:
     raw = source_path.read_bytes()
-    source_sha = sha256_bytes(raw)
-    text = raw.decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(text, newline=""))
+    reader = csv.DictReader(io.StringIO(raw.decode("utf-8-sig"), newline=""))
     required = {"Registry", "Assignment", "Organization Name"}
-    if reader.fieldnames is None or not required.issubset(set(reader.fieldnames)):
-        raise ValueError(
-            "Source CSV must contain Registry, Assignment and Organization Name"
-        )
+    if reader.fieldnames is None or not required.issubset(reader.fieldnames):
+        raise ValueError("Source CSV must contain Registry, Assignment and Organization Name")
 
-    rows: dict[str, tuple[str, str]] = {}
+    rows: set[tuple[str, str]] = set()
+    organizations: dict[str, set[str]] = defaultdict(set)
     for row in reader:
         if not any(str(value or "").strip() for value in row.values()):
             continue
@@ -43,96 +40,68 @@ def normalize_source(source_path: Path) -> tuple[str, int, str]:
             continue
         assignment = normalize_assignment(str(row.get("Assignment") or ""))
         organization = str(row.get("Organization Name") or "").strip()
-        address = str(row.get("Organization Address") or "").strip()
         if not organization:
             raise ValueError(f"Assignment {assignment} has no organization name")
-        existing = rows.get(assignment)
-        candidate = (organization, address)
-        if existing is not None and existing != candidate:
-            raise ValueError(f"Conflicting source rows for assignment {assignment}")
-        rows[assignment] = candidate
+        rows.add((assignment, organization))
+        organizations[assignment].add(organization)
 
-    buffer = io.StringIO(newline="")
-    writer = csv.writer(buffer, lineterminator="\n")
-    writer.writerow(["Registry", "Assignment", "Organization Name", "Organization Address"])
-    for assignment in sorted(rows):
-        organization, address = rows[assignment]
-        writer.writerow(["MA-L", assignment, organization, address])
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(["Registry", "Assignment", "Organization Name"])
+    for assignment, organization in sorted(rows):
+        writer.writerow(["MA-L", assignment, organization])
 
-    return buffer.getvalue(), len(rows), source_sha
+    ambiguous = sorted(k for k, values in organizations.items() if len(values) > 1)
+    return output.getvalue(), len(organizations), len(rows), ambiguous, sha256_bytes(raw)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Normalize a downloaded IEEE Registration Authority MA-L CSV into "
-            "the versioned local OUI snapshot used by OpenSenseDocumentation."
-        )
-    )
-    parser.add_argument(
-        "--source",
-        required=True,
-        help="Path to a previously downloaded IEEE MA-L oui.csv file",
-    )
-    parser.add_argument(
-        "--database-version",
-        required=True,
-        help="Version label for the local snapshot, e.g. 2026-08",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default="data/oui",
-        help="Target directory for snapshot and manifest (default: data/oui)",
-    )
-    parser.add_argument(
-        "--source-url",
-        default=DEFAULT_SOURCE_URL,
-        help="Source URL recorded in the manifest",
-    )
+    parser = argparse.ArgumentParser(description="Normalize an IEEE MA-L CSV snapshot.")
+    parser.add_argument("--source", required=True)
+    parser.add_argument("--database-version", required=True)
+    parser.add_argument("--output-dir", default="data/oui")
+    parser.add_argument("--source-url", default=DEFAULT_SOURCE_URL)
     args = parser.parse_args()
 
-    source_path = Path(args.source).resolve()
-    if not source_path.is_file():
-        parser.error(f"Source file not found: {source_path}")
-
+    source = Path(args.source).resolve()
+    if not source.is_file():
+        parser.error(f"Source file not found: {source}")
     version = str(args.database_version).strip()
     if re.fullmatch(r"[A-Za-z0-9._-]+", version) is None:
-        parser.error(
-            "database-version may contain only letters, digits, dot, underscore and hyphen"
-        )
+        parser.error("Invalid database-version")
 
-    normalized, entry_count, source_sha = normalize_source(source_path)
+    normalized, entries, rows, ambiguous, source_sha = normalize_source(source)
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-
     file_name = f"oui-{version}.csv"
-    output_path = output_dir / file_name
-    output_path.write_text(normalized, encoding="utf-8", newline="\n")
-    output_sha = sha256_bytes(normalized.encode("utf-8"))
+    snapshot = output_dir / file_name
+    snapshot.write_text(normalized, encoding="utf-8", newline="\n")
+    snapshot_sha = sha256_bytes(normalized.encode("utf-8"))
 
     manifest = {
         "schemaVersion": "1.0.0",
         "databaseVersion": version,
         "registry": "MA-L",
         "file": file_name,
-        "sha256": output_sha,
-        "entryCount": entry_count,
+        "sha256": snapshot_sha,
+        "entryCount": entries,
+        "rowCount": rows,
+        "ambiguousAssignmentCount": len(ambiguous),
+        "ambiguousAssignments": ambiguous,
         "source": {
             "name": "IEEE Registration Authority MA-L public listing",
             "url": args.source_url,
             "sourceSha256": source_sha,
         },
     }
-    manifest_path = output_dir / "manifest.json"
-    manifest_path.write_text(
+    (output_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
         newline="\n",
     )
-
-    print(f"Wrote {entry_count} MA-L assignments to {output_path}")
-    print(f"Snapshot SHA-256: {output_sha}")
-    print(f"Manifest: {manifest_path}")
+    print(f"Wrote {entries} unique MA-L assignments ({rows} rows) to {snapshot}")
+    print(f"Ambiguous MA-L assignments: {len(ambiguous)}")
+    print(f"Snapshot SHA-256: {snapshot_sha}")
     return 0
 
 
